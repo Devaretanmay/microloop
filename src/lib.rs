@@ -66,7 +66,7 @@ pub extern "C" fn microloop_verify(
     verify(state, tool_slice, args_slice)
 }
 
-pub(crate) fn verify(state: &mut MicroloopState, tool_slice: &[u8], args_slice: &[u8]) -> u8 {
+pub fn verify(state: &mut MicroloopState, tool_slice: &[u8], args_slice: &[u8]) -> u8 {
     let tool_str = str::from_utf8(tool_slice).unwrap_or("").to_string();
     let args_str = str::from_utf8(args_slice).unwrap_or("").to_string();
 

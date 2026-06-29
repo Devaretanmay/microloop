@@ -162,6 +162,10 @@ impl HistoryTracker {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.call_history.clear();
+    }
+
     pub fn check_loop(
         &mut self,
         tool: &str,
