@@ -23,6 +23,19 @@ We ran 100,000 iterations of complex, nested JSON LLM tool payloads on a single 
 | **P99 Latency** | `25.12 µs` |
 | **Adversarial Loop Fast-Reject** | `375 ns` (0.37 µs) |
 
+### Python PyO3 Adapter Benchmarks
+Even when called from Python, Microloop uses PyO3 to bypass slow FFI and maintain native Rust speeds. Here is the overhead when integrated into a Python agent:
+
+| Metric | Result |
+|--------|--------|
+| **Max Throughput** | `13,603 verifications/sec` |
+| **Cold Start Latency** | `107 µs` |
+| **Average Latency (Warm)** | `73.39 µs` |
+| **P99 Latency** | `90.50 µs` |
+| **Adversarial Loop Fast-Reject** | `5.5 µs` |
+
+*Note: The ~50µs overhead difference between Native Rust and Python is due entirely to Python's `json.dumps()` serialization.*
+
 *Benchmarks were executed using `cargo run --release --bin microloop-bench`*
 
 ## Building
