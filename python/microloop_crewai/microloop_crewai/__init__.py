@@ -1,3 +1,0 @@
-"""
-Microloop CrewAI Adapter
-"""

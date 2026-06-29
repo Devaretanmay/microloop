@@ -1,2 +1,0 @@
-microloop-core>=0.1.1
-langgraph>=0.0.1

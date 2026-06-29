@@ -1,0 +1,13 @@
+[package]
+name = "microloop-python"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[lib]
+name = "microloop_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21.2", features = ["extension-module", "abi3-py38"] }
+microloop = { path = "../.." }

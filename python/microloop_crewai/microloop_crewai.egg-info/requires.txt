@@ -1,2 +1,0 @@
-microloop-core>=0.1.1
-crewai>=0.1.0

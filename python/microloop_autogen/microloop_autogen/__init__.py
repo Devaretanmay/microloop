@@ -1,3 +1,0 @@
-"""
-Microloop AutoGen Adapter
-"""

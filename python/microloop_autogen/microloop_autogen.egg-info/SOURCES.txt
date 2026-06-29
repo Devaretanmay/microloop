@@ -1,8 +1,0 @@
-README.md
-pyproject.toml
-microloop_autogen/__init__.py
-microloop_autogen.egg-info/PKG-INFO
-microloop_autogen.egg-info/SOURCES.txt
-microloop_autogen.egg-info/dependency_links.txt
-microloop_autogen.egg-info/requires.txt
-microloop_autogen.egg-info/top_level.txt
