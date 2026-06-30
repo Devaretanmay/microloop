@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "microloop-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "Microloop integration for MCP"
 authors = [{ name = "Microloop Team" }]
 requires-python = ">=3.9"
 dependencies = [
-    "microloop-core>=0.1.1"
+    "microloop>=0.1.1"
 ]
