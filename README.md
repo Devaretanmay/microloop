@@ -106,14 +106,13 @@ The core trajectory hashing mechanism is designed to minimize overhead in the ag
 
 ---
 
-## Comparison with Alternatives
+## The True Cost of a Loop
 
-| Feature | Microloop | CommandCode | Keel | Snubber |
-|---------|-----------|-------------|------|---------|
-| **Latency** | < 1µs | 100-300ms | 10ms | 50ms |
-| **Language** | Native (Rust) | JS/TS | Go | JS |
-| **Dependency**| None (`no_std`) | Node.js | None | Node.js |
-| **Mechanism** | Hash sliding window | LLM heuristics| State tree | Heuristics |
+When an autonomous agent enters an infinite loop, it burns through time and API credits. 
+
+If you attempt to catch these loops using standard LLM logic (like giving the agent a prompt to "think about your mistakes"), each iteration still requires an expensive API roundtrip, often taking **1.5+ seconds** and consuming tokens.
+
+Microloop operates entirely locally. By intercepting redundant trajectories before they ever leave the machine, it blocks loops in **under 1 microsecond**. This transforms what would have been an expensive 1.5s API call into an instant, cost-free pivot.
 
 ---
 
