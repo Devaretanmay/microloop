@@ -98,6 +98,8 @@ Link against `libmicroloop.so` and include `microloop.h`.
 
 The core trajectory hashing mechanism is designed to minimize overhead in the agent's critical path.
 
+![Performance Comparison](assets/perf_comparison.png)
+
 - **Overhead per step:** ~480ns
 - **Memory Footprint:** < 10 MB overhead
 - **Throughput:** > 2,000,000 requests/sec per thread

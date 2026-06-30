@@ -78,8 +78,8 @@ pub fn pair_tool_calls(messages: &[Value]) -> Vec<(ToolCallInfo, ToolResult)> {
                 if let Some(info) = pending_calls.remove(id) {
                     pairs.push((info, ToolResult { content }));
                 }
-            } else if role == "user" {
-                if let Some(content_arr) = msg.get("content").and_then(|c| c.as_array()) {
+            } else if role == "user"
+                && let Some(content_arr) = msg.get("content").and_then(|c| c.as_array()) {
                     for block in content_arr {
                         if block.get("type").and_then(|t| t.as_str()) == Some("tool_result") {
                             let id = block
@@ -104,7 +104,6 @@ pub fn pair_tool_calls(messages: &[Value]) -> Vec<(ToolCallInfo, ToolResult)> {
                         }
                     }
                 }
-            }
         }
     }
 
