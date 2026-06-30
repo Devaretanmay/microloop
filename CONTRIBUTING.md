@@ -17,6 +17,11 @@ Contributions should stay within the guardrail proxy and state engine domain.
 
 ## Getting Started
 
+### 🌟 Good First Issues
+If you are new to the project, looking for a place to start? We actively curate our issue tracker with the label **`good first issue`**. These are issues that have a clear scope, don't require deep architectural knowledge, and are perfect for your first PR!
+
+You can find them by searching the issue tracker for `is:issue is:open label:"good first issue"`.
+
 ```bash
 git clone https://github.com/tanmaydevare/microloop
 cd microloop
