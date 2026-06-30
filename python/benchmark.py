@@ -1,9 +1,9 @@
 import time
 import json
-from microloop.langchain import MicroloopLangchain
+from microloop.microloop_core import Microloop
 
 def run_benchmarks():
-    print("Starting Real Microloop Python Adapter Benchmarks...\n")
+    print("Starting Real Microloop Python Benchmarks...\n")
 
     yaml_config = """
 rules:
@@ -16,23 +16,23 @@ max_repeats: 3
 
     print("--- 1. Initialization ---")
     try:
-        adapter = MicroloopLangchain(yaml_config)
-        print("MicroloopLangchain Initialization: Success\n")
+        engine = Microloop(yaml_config)
+        print("Microloop Initialization: Success\n")
     except Exception as e:
         print(f"Failed to initialize: {e}")
         return
 
     # Real LLM Payload
-    payload_simple = {"query": "best pizza in new york"}
-    payload_complex = {
+    payload_simple = json.dumps({"query": "best pizza in new york"})
+    payload_complex = json.dumps({
         "code": "def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n\nprint(fibonacci(10))",
         "timeout": 30,
         "environment": {"lang": "python3", "sandbox": True}
-    }
+    })
     
     print("--- 2. Cold Start Latency ---")
     start = time.perf_counter_ns()
-    res = adapter.verify("search_web", payload_simple)
+    res = engine.verify("search_web", payload_simple)
     elapsed = time.perf_counter_ns() - start
     print(f"First verification (Cold Start): {elapsed} ns\n")
 
@@ -40,19 +40,12 @@ max_repeats: 3
     iterations = 100_000
     latencies = []
     
-    # We clear the state history internally to prevent blocking, but since we are
-    # testing the adapter, we can just instantiate a new adapter or use alternating tool names.
-    # Wait, the history blocks if the SAME tool and args repeat 3 times.
-    # Let's just bypass the block by alternating tools slightly.
-    # Actually, the rust loop was bypassing it by calling `state.history.clear()`. 
-    # We exposed `clear_history()` on the Rust engine for this exact benchmark purpose!
-    
     start_total = time.perf_counter_ns()
     for i in range(iterations):
         iter_start = time.perf_counter_ns()
-        
-        adapter.engine.clear_history()
-        adapter.verify("execute_code", payload_complex)
+        # ponytail: unique payload per iteration avoids loop detector
+        payload = json.dumps({"iteration": i})
+        engine.verify("execute_code", payload)
         
         latencies.append(time.perf_counter_ns() - iter_start)
         
@@ -72,16 +65,16 @@ max_repeats: 3
     print(f"P99 Latency: {p99} ns ({p99 / 1000:.2f} µs)\n")
 
     print("--- 4. Adversarial Loop Detection (Fast Reject) ---")
-    adapter = MicroloopLangchain(yaml_config)
+    engine = Microloop(yaml_config)
     for _ in range(3):
-        adapter.verify("execute_code", payload_complex)
+        engine.verify("execute_code", payload_complex)
         
     start = time.perf_counter_ns()
-    res = adapter.verify("execute_code", payload_complex)
+    res = engine.verify("execute_code", payload_complex)
     elapsed = time.perf_counter_ns() - start
     
     print(f"Loop Detection Reject Latency: {elapsed} ns")
-    if res == False:
+    if res != 0:
         print("Result: Blocked successfully.")
         
 if __name__ == "__main__":

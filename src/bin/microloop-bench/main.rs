@@ -48,14 +48,11 @@ max_repeats: 3
     let mut latencies = Vec::with_capacity(iterations);
     
     let start_total = Instant::now();
-    for _ in 0..iterations {
+    for i in 0..iterations {
         let iter_start = Instant::now();
-        // We alternate tools slightly to avoid immediate identical loop triggers blocking it
-        // Actually, if we just feed the same tool, after 3 repeats it will BLOCK.
-        // We want to measure the verification speed of valid tools. So we will pass alternating IDs or just clear history.
-        state.history.clear(); 
-        
-        let res = microloop::verify(&mut state, b"execute_code", payload_complex.as_bytes());
+        // ponytail: unique payload per iteration avoids loop detector
+        let payload = format!(r#"{{"iteration": {}}}"#, i);
+        let res = microloop::verify(&mut state, b"execute_code", payload.as_bytes());
         black_box(res);
         latencies.push(iter_start.elapsed().as_nanos());
     }

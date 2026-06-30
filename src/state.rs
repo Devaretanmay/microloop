@@ -13,6 +13,7 @@ pub struct MicroloopState {
     pub strictness: Strictness,
     pub max_repeats: usize,
     pub ignore_args: bool,
+    pub history_window: Option<usize>,
 
     pub engine: RuleEngine,
     pub history: HistoryTracker,
@@ -36,6 +37,7 @@ impl MicroloopState {
             strictness: config.strictness,
             max_repeats: config.max_repeats,
             ignore_args: config.ignore_args,
+            history_window: config.history_window,
             engine,
             history,
             error_buffer,

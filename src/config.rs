@@ -81,6 +81,7 @@ pub struct MicroloopConfig {
     pub max_repeats: usize,
     #[serde(default)]
     pub ignore_args: bool,
+    pub history_window: Option<usize>,
 
     #[serde(default)]
     pub rules: Vec<RuleConfig>,

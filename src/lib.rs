@@ -73,7 +73,7 @@ pub fn verify(state: &mut MicroloopState, tool_slice: &[u8], args_slice: &[u8]) 
     if let Err(msg) =
         state
             .history
-            .check_loop(&tool_str, &args_str, state.ignore_args, state.max_repeats)
+            .check_loop(&tool_str, &args_str, state.ignore_args, state.max_repeats, state.history_window)
     {
         state.set_error(&msg);
         return state.block_result();

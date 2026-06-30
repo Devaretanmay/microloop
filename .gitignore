@@ -1,13 +1,10 @@
 /target
+Cargo.lock
 microloop.h
 .DS_Store
 _system/
-.DS_Store
 *.log
 releases/
-
-/target/
-Cargo.lock
 
 # Test artifacts & Logs
 .microloop/
@@ -18,8 +15,3 @@ hello_microloop/
 # Python builds
 __pycache__/
 *.so
-microloop.h
-.DS_Store
-_system/
-.DS_Store
-*.log

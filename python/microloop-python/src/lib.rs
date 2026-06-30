@@ -21,9 +21,6 @@ impl PyMicroloop {
         microloop::verify(&mut self.state, tool_name.as_bytes(), tool_args_json.as_bytes())
     }
     
-    fn clear_history(&mut self) {
-        self.state.history.clear();
-    }
 }
 
 #[pymodule]

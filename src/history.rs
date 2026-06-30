@@ -161,27 +161,22 @@ impl HistoryTracker {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.call_history.clear();
-    }
-
     pub fn check_loop(
         &mut self,
         tool: &str,
         args: &str,
         ignore_args: bool,
         max_repeats: usize,
+        history_window: Option<usize>,
     ) -> Result<(), alloc::string::String> {
         let mut repeat_count = 1;
-        for (past_tool, past_args) in self.call_history.iter().rev() {
+        let window_size = history_window.unwrap_or(max_repeats * 2).max(max_repeats * 2);
+        
+        for (past_tool, past_args) in self.call_history.iter().rev().take(window_size) {
             if past_tool == tool {
                 if ignore_args || past_args == args {
                     repeat_count += 1;
-                } else {
-                    break;
                 }
-            } else {
-                break;
             }
         }
 
