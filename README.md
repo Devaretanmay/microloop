@@ -3,7 +3,6 @@
 > **A zero-dependency drop-in infinite loop detector for autonomous coding agents.**
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Build](https://github.com/tanmaydevare/microloop/actions/workflows/rust.yml/badge.svg)
 
 Microloop prevents autonomous AI agents from falling into infinite loops by intercepting redundant trajectories.
 
