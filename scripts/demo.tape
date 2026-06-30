@@ -3,15 +3,15 @@
 # 
 # On macOS: brew install vhs
 # On Linux: go install github.com/charmbracelet/vhs@latest
-#
-# Alternative: use scripts/record-demo.sh (uses asciinema + agg)
 
 Output assets/demo.gif
 
-Set FontSize 16
-Set Width 800
-Set Height 400
-Set TypingSpeed 12ms
+Set FontSize 18
+Set Width 720
+Set Height 480
+Set Theme "Catppuccin Mocha"
+Set TypingSpeed 40ms
+Set Padding 20
 
 Type "cargo run --example basic" Enter
-Sleep 5s
+Sleep 8s
