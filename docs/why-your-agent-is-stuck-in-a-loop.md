@@ -43,7 +43,7 @@ This is a deliberate tradeoff. Semantic comparison requires embeddings, which pu
 | Deterministic | Yes | No |
 | Memory | < 10 MB | N/A |
 
-At 2 million checks per second per thread, Microloop is not a bottleneck — it's invisible.
+At 2 million checks per second per thread, Microloop adds no measurable overhead.
 
 ## How it works in 30 lines
 
@@ -92,7 +92,7 @@ cargo add microloop
 cargo run --example basic
 ```
 
-10 seconds, and you've seen exactly what it does. If you're running an autonomous agent in production and you've hit the loop problem, Microloop is designed for you.
+10 seconds, and you've seen exactly what it does.
 
 ---
 

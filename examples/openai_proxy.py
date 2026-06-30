@@ -13,13 +13,14 @@ Non-tool calls and streaming responses pass through transparently
 with zero parsing overhead.
 """
 
+import os
 from openai import OpenAI
 
 # Point the client at the local proxy instead of the OpenAI API.
 # The proxy handles authentication forwarding.
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key="sk-..."  # or set OPENAI_API_KEY env var
+    api_key=os.environ.get("OPENAI_API_KEY", "sk-...")
 )
 
 response = client.chat.completions.create(

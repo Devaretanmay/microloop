@@ -6,7 +6,6 @@
 
 AI agents get stuck in infinite tool loops. Each loop cycle burns API credits. Microloop detects redundant tool calls locally in **nanoseconds** and blocks them before the call ever leaves the machine.
 
-![Demo](assets/demo.gif)
 
 ---
 

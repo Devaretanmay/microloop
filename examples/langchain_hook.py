@@ -12,6 +12,7 @@ Prerequisites:
 import json
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.tools import tool
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from microloop import Microloop
 
@@ -36,5 +37,10 @@ def write_file(path: str, content: str) -> str:
 
 tools = [write_file]
 llm = ChatOpenAI(model="gpt-4o")
-agent = create_openai_tools_agent(llm, tools, ...)
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+agent = create_openai_tools_agent(llm, tools, prompt)
 executor = AgentExecutor(agent=agent, tools=tools, verbose=True)

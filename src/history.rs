@@ -176,10 +176,8 @@ impl HistoryTracker {
             .max(max_repeats * 2);
 
         for (past_tool, past_args) in self.call_history.iter().rev().take(window_size) {
-            if past_tool == tool {
-                if ignore_args || past_args == args {
-                    repeat_count += 1;
-                }
+            if past_tool == tool && (ignore_args || past_args == args) {
+                repeat_count += 1;
             }
         }
 
