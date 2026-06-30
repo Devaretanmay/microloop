@@ -17,8 +17,8 @@ Contributions should stay within the guardrail proxy and state engine domain.
 
 ## Getting Started
 
-### 🌟 Good First Issues
-If you are new to the project, looking for a place to start? We actively curate our issue tracker with the label **`good first issue`**. These are issues that have a clear scope, don't require deep architectural knowledge, and are perfect for your first PR!
+### Good First Issues
+If you are new to the project, we actively curate our issue tracker with the label **`good first issue`**. These issues have a clear scope and do not require deep architectural knowledge.
 
 You can find them by searching the issue tracker for `is:issue is:open label:"good first issue"`.
 

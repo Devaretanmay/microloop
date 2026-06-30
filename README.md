@@ -1,17 +1,17 @@
 # Microloop
 
-> **The ultra-fast, zero-dependency drop-in infinite loop detector for autonomous coding agents.**
+> **A zero-dependency drop-in infinite loop detector for autonomous coding agents.**
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Build](https://github.com/tanmaydevare/microloop/actions/workflows/rust.yml/badge.svg)
 
-Microloop prevents autonomous AI agents from falling into catastrophic infinite loops by intercepting redundant trajectories in sub-millisecond time.
+Microloop prevents autonomous AI agents from falling into infinite loops by intercepting redundant trajectories.
 
 ---
 
-## ⚡ 30-Second Quick Start
+## 30-Second Quick Start
 
-Microloop acts as a middleware. If you want to use it as an upstream proxy in front of your LLM:
+Microloop acts as a middleware. To use it as an upstream proxy in front of an LLM:
 
 ```bash
 # 1. Start the proxy
@@ -20,11 +20,10 @@ cargo run --release --bin microloop-proxy
 # 2. Point your agent to the proxy
 export TARGET_API_URL="http://127.0.0.1:20128/v1"
 ```
-That's it. Your agent is now protected against infinite looping.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 sequenceDiagram
@@ -40,18 +39,18 @@ sequenceDiagram
     Agent->>Microloop: Step 2: Identical Tool Execution
     Microloop->>Microloop: Hash Trajectory State
     Microloop-->>Agent: BLOCK (Loop Detected)
-    Note over Agent: Agent is forced to pivot!
+    Note over Agent: Agent is forced to pivot
 ```
 
-### See it in action!
-*(GIF Placeholder: Drop your demo GIF here!)*
+### Demonstration
+*(GIF Placeholder)*
 <!-- ![Demo](assets/demo.gif) -->
 
 ---
 
-## 📦 Installation
+## Installation
 
-Microloop is a C-compatible shared library `no_std` core, meaning it runs anywhere.
+Microloop is a C-compatible shared library `no_std` core.
 
 ### Rust
 Add this to your `Cargo.toml`:
@@ -83,7 +82,7 @@ Link against `libmicroloop.so` and include `microloop.h`.
 
 ---
 
-## 📖 API Reference
+## API Reference
 
 ### Core Methods
 
@@ -96,9 +95,9 @@ Link against `libmicroloop.so` and include `microloop.h`.
 
 ---
 
-## 🏎️ Performance Numbers
+## Performance
 
-We take latency seriously. The core trajectory hashing mechanism is designed to sit directly in your hot path without slowing down the agent.
+The core trajectory hashing mechanism is designed to minimize overhead in the agent's critical path.
 
 - **Overhead per step:** ~480ns
 - **Memory Footprint:** < 10 MB overhead
@@ -106,18 +105,18 @@ We take latency seriously. The core trajectory hashing mechanism is designed to 
 
 ---
 
-## 🥊 Comparison with Alternatives
+## Comparison with Alternatives
 
 | Feature | Microloop | CommandCode | Keel | Snubber |
 |---------|-----------|-------------|------|---------|
-| **Latency** | **< 1µs** | 100-300ms | 10ms | 50ms |
+| **Latency** | < 1µs | 100-300ms | 10ms | 50ms |
 | **Language** | Native (Rust) | JS/TS | Go | JS |
-| **Dependency**| **None** (`no_std`) | Node.js | None | Node.js |
+| **Dependency**| None (`no_std`) | Node.js | None | Node.js |
 | **Mechanism** | Hash sliding window | LLM heuristics| State tree | Heuristics |
 
 ---
 
-## 🔮 Roadmap
+## Roadmap
 
 - [x] Basic hash-based loop detection
 - [x] C-Bindings and `no_std` core
@@ -127,22 +126,22 @@ We take latency seriously. The core trajectory hashing mechanism is designed to 
 
 ---
 
-## ❓ FAQ
+## FAQ
 
 **Does Microloop block valid repetitive tasks?**
 No. Microloop uses a sliding trajectory hash. If an agent performs the exact same sequence of failures and identical file states, it is blocked. Deliberate repetition (like processing an array row-by-row) generates distinct state deltas.
 
 **Can I use this with any agent?**
-Yes! Microloop is agnostic. It can be used via native bindings or as a simple reverse proxy on `localhost`.
+Yes. Microloop is agnostic. It can be used via native bindings or as a simple reverse proxy on `localhost`.
 
 ---
 
-## 🔒 Security
+## Security
 
-We take the security of Microloop seriously. If you discover a security vulnerability, please do NOT file a public issue. Instead, refer to our [Security Policy](SECURITY.md) and email the maintainers directly. 
+If you discover a security vulnerability, please do NOT file a public issue. Refer to our [Security Policy](SECURITY.md) and email the maintainers directly. 
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
