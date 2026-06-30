@@ -70,11 +70,13 @@ pub fn verify(state: &mut MicroloopState, tool_slice: &[u8], args_slice: &[u8]) 
     let tool_str = str::from_utf8(tool_slice).unwrap_or("").to_string();
     let args_str = str::from_utf8(args_slice).unwrap_or("").to_string();
 
-    if let Err(msg) =
-        state
-            .history
-            .check_loop(&tool_str, &args_str, state.ignore_args, state.max_repeats, state.history_window)
-    {
+    if let Err(msg) = state.history.check_loop(
+        &tool_str,
+        &args_str,
+        state.ignore_args,
+        state.max_repeats,
+        state.history_window,
+    ) {
         state.set_error(&msg);
         return state.block_result();
     }

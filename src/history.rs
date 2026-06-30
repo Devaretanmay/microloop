@@ -79,31 +79,32 @@ pub fn pair_tool_calls(messages: &[Value]) -> Vec<(ToolCallInfo, ToolResult)> {
                     pairs.push((info, ToolResult { content }));
                 }
             } else if role == "user"
-                && let Some(content_arr) = msg.get("content").and_then(|c| c.as_array()) {
-                    for block in content_arr {
-                        if block.get("type").and_then(|t| t.as_str()) == Some("tool_result") {
-                            let id = block
-                                .get("tool_use_id")
-                                .and_then(|i| i.as_str())
-                                .unwrap_or("");
+                && let Some(content_arr) = msg.get("content").and_then(|c| c.as_array())
+            {
+                for block in content_arr {
+                    if block.get("type").and_then(|t| t.as_str()) == Some("tool_result") {
+                        let id = block
+                            .get("tool_use_id")
+                            .and_then(|i| i.as_str())
+                            .unwrap_or("");
 
-                            let content_str = match block.get("content") {
-                                Some(Value::String(s)) => s.clone(),
-                                Some(other) => other.to_string(),
-                                None => String::new(),
-                            };
+                        let content_str = match block.get("content") {
+                            Some(Value::String(s)) => s.clone(),
+                            Some(other) => other.to_string(),
+                            None => String::new(),
+                        };
 
-                            if let Some(info) = pending_calls.remove(id) {
-                                pairs.push((
-                                    info,
-                                    ToolResult {
-                                        content: content_str,
-                                    },
-                                ));
-                            }
+                        if let Some(info) = pending_calls.remove(id) {
+                            pairs.push((
+                                info,
+                                ToolResult {
+                                    content: content_str,
+                                },
+                            ));
                         }
                     }
                 }
+            }
         }
     }
 
@@ -170,8 +171,10 @@ impl HistoryTracker {
         history_window: Option<usize>,
     ) -> Result<(), alloc::string::String> {
         let mut repeat_count = 1;
-        let window_size = history_window.unwrap_or(max_repeats * 2).max(max_repeats * 2);
-        
+        let window_size = history_window
+            .unwrap_or(max_repeats * 2)
+            .max(max_repeats * 2);
+
         for (past_tool, past_args) in self.call_history.iter().rev().take(window_size) {
             if past_tool == tool {
                 if ignore_args || past_args == args {
