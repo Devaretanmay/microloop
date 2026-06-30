@@ -8,14 +8,55 @@ use axum::{
     },
 };
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc::Sender;
+
+#[derive(Serialize)]
+pub struct AnalyzePayload {
+    pub session_id: String,
+    pub tool_call: String,
+    pub llm_error_response: String,
+}
+
+#[derive(Deserialize)]
+pub struct BlockRulePayload {
+    pub session_id: String,
+    pub tool_call: String,
+    pub reason: String,
+}
+
+#[derive(Clone)]
+pub struct AppState {
+    pub microloop_state: Arc<Mutex<microloop::state::MicroloopState>>,
+    pub semantic_blocklist: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    pub target_base_url: String,
+    pub api_key: String,
+    pub sidecar_tx: Sender<AnalyzePayload>,
+}
+
+pub async fn handle_block_rule(
+    State(state): State<AppState>,
+    axum::Json(payload): axum::Json<BlockRulePayload>,
+) -> impl IntoResponse {
+    let mut blocklist = state.semantic_blocklist.lock().unwrap();
+    blocklist
+        .entry(payload.session_id.clone())
+        .or_insert_with(HashSet::new)
+        .insert(payload.tool_call.clone());
+    
+    println!("Proxy received semantic block rule for session {} on tool '{}': {}", payload.session_id, payload.tool_call, payload.reason);
+    StatusCode::OK
+}
 
 pub fn intercept_tool_calls(
+    session_id: &str,
     request_body: &Value,
     response: &mut Value,
-    state_mutex: &Arc<Mutex<microloop::state::MicroloopState>>,
+    app_state: &AppState,
 ) {
     let empty_vec = Vec::new();
     let messages = request_body
@@ -23,6 +64,19 @@ pub fn intercept_tool_calls(
         .and_then(|m| m.as_array())
         .unwrap_or(&empty_vec);
     let prior_outcomes = microloop::history::pair_tool_calls(messages);
+
+    // Build LLM error response string for sidecar
+    let llm_error_response = if let Some(choices) = response.get("choices").and_then(|c| c.as_array()) {
+        if let Some(first) = choices.first() {
+            if let Some(msg) = first.get("message") {
+                if let Some(content) = msg.get("content").and_then(|c| c.as_str()) {
+                    content.to_string()
+                } else {
+                    String::new()
+                }
+            } else { String::new() }
+        } else { String::new() }
+    } else { String::new() };
 
     let mut parsed_tool_calls = Vec::new();
     let mut is_anthropic = false;
@@ -74,7 +128,29 @@ pub fn intercept_tool_calls(
     }
 
     for (name, arguments_str, arguments_val) in parsed_tool_calls {
-        let mut state = state_mutex.lock().unwrap();
+        
+        // 1. Check Semantic Blocklist first
+        {
+            let blocklist = app_state.semantic_blocklist.lock().unwrap();
+            if let Some(session_blocks) = blocklist.get(session_id) {
+                if session_blocks.contains(&name) {
+                    eprintln!("Semantic Loop Blocked: tool {}", name);
+                    block_response(response, is_anthropic, format!("Semantic loop detected on tool '{}'", name));
+                    return;
+                }
+            }
+        }
+        
+        // 2. Forward to Semantic Sidecar
+        let payload = AnalyzePayload {
+            session_id: session_id.to_string(),
+            tool_call: format!("{}({})", name, arguments_str),
+            llm_error_response: llm_error_response.clone(),
+        };
+        let _ = app_state.sidecar_tx.try_send(payload); // Silently drop if channel full
+
+        // 3. Check Syntactic Core
+        let mut state = app_state.microloop_state.lock().unwrap();
 
         let empty_volatile = Vec::new();
         let mut volatile_fields = &empty_volatile;
@@ -174,42 +250,45 @@ pub fn intercept_tool_calls(
             };
 
             if is_anthropic {
-                if let Value::Object(resp_map) = response {
-                    resp_map.insert("stop_reason".to_string(), json!("end_turn"));
-                    resp_map.insert(
-                        "content".to_string(),
-                        json!([{
-                            "type": "text",
-                            "text": format!("SYSTEM INTERCEPT: Microloop blocked this action because: {}", err_str)
-                        }])
-                    );
-                }
+                block_response(response, is_anthropic, err_str);
             } else {
-                if let Some(choices) = response.get_mut("choices").and_then(|c| c.as_array_mut())
-                    && let Some(first_choice) = choices.first_mut()
-                    && let Some(Value::Object(msg_map)) = first_choice.get_mut("message")
-                {
-                    msg_map.remove("tool_calls");
-                    msg_map.insert(
-                        "content".to_string(),
-                        json!(format!(
-                            "SYSTEM INTERCEPT: Microloop blocked this action because: {}",
-                            err_str
-                        )),
-                    );
-                }
+                block_response(response, is_anthropic, err_str);
             }
             return;
         }
     }
 }
 
-#[derive(Clone)]
-pub struct AppState {
-    pub microloop_state: Arc<Mutex<microloop::state::MicroloopState>>,
-    pub target_base_url: String,
-    pub api_key: String,
+fn block_response(response: &mut Value, is_anthropic: bool, err_str: String) {
+    if is_anthropic {
+        if let Value::Object(resp_map) = response {
+            resp_map.insert("stop_reason".to_string(), json!("end_turn"));
+            resp_map.insert(
+                "content".to_string(),
+                json!([{
+                    "type": "text",
+                    "text": format!("SYSTEM INTERCEPT: Microloop blocked this action because: {}", err_str)
+                }])
+            );
+        }
+    } else {
+        if let Some(choices) = response.get_mut("choices").and_then(|c| c.as_array_mut())
+            && let Some(first_choice) = choices.first_mut()
+            && let Some(Value::Object(msg_map)) = first_choice.get_mut("message")
+        {
+            msg_map.remove("tool_calls");
+            msg_map.insert(
+                "content".to_string(),
+                json!(format!(
+                    "SYSTEM INTERCEPT: Microloop blocked this action because: {}",
+                    err_str
+                )),
+            );
+        }
+    }
 }
+
+    // (Removed AppState definition since we moved it to the top)
 
 pub async fn handle_proxy_request(
     State(state): State<AppState>,
@@ -296,7 +375,12 @@ pub async fn handle_proxy_request(
         }
     };
 
-    intercept_tool_calls(&body, &mut response_json, &state.microloop_state);
+    let session_id = headers.get("x-session-id")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("default_session")
+        .to_string();
+
+    intercept_tool_calls(&session_id, &body, &mut response_json, &state);
 
     if stream_requested {
         let sse_stream = stream! {
