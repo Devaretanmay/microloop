@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "microloop"
-version = "0.1.1"
+version = "0.1.2"
 description = "Ultra-fast runtime safety layer for autonomous agents — detects agent tool call loops before they burn API credits"
 authors = [{ name = "Microloop Team" }]
 license = "Apache-2.0"
