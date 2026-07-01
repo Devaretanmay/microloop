@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 const HISTORY_WINDOW: usize = 5;
-const SIMILARITY_THRESHOLD: f32 = 0.95;
+const SIMILARITY_THRESHOLD: f32 = 0.85;
 
 #[derive(Deserialize)]
 struct AnalyzePayload {
@@ -74,11 +74,6 @@ async fn handle_analyze(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AnalyzePayload>,
 ) -> &'static str {
-    // Only analyze if there's an actual error response (failure state)
-    if payload.llm_error_response.trim().is_empty() {
-        return "Ignored: No error response";
-    }
-
     let concat_text = format!(
         "Tool: {} | Error: {}",
         payload.tool_call, payload.llm_error_response
@@ -100,6 +95,7 @@ async fn handle_analyze(
     // Check similarity against history
     for past_embedding in session_history.iter() {
         if let Ok(similarity) = model::cosine_similarity(&embedding, past_embedding) {
+            println!("Debug: Similarity between current and past call: {}", similarity);
             if similarity > SIMILARITY_THRESHOLD {
                 loop_detected = true;
                 break;
