@@ -9,7 +9,8 @@ homepage = "https://github.com/Devaretanmay/microloop"
 readme = "README.md"
 keywords = ["agent", "llm", "guardrail", "safety", "loop-detection"]
 categories = ["development-tools::debugging", "web-programming"]
-exclude = ["microloop.h", "python/", "litellm/"]
+include = ["src/**/*", "build.rs", "cbindgen.toml", "Cargo.toml", "LICENSE", "README.md"]
+exclude = ["python/", "litellm/"]
 
 [workspace]
 members = ["crates/microloop-proxy", "crates/microloop-semantic", "python/microloop-python", "crates/microloop-wasm"]
