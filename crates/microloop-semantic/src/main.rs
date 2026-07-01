@@ -6,7 +6,6 @@ use axum::{
     Json, Router,
 };
 use candle_core::Tensor;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
@@ -24,17 +23,13 @@ struct AnalyzePayload {
 }
 
 #[derive(Serialize)]
-struct BlockRulePayload {
-    session_id: String,
-    tool_call: String,
-    reason: String,
+struct AnalyzeResponse {
+    loop_detected: bool,
 }
 
 struct AppState {
     model: Arc<model::SemanticModel>,
     history: Mutex<HashMap<String, VecDeque<Tensor>>>,
-    http_client: Client,
-    proxy_url: String,
 }
 
 #[tokio::main]
@@ -49,13 +44,9 @@ async fn main() {
         }
     };
 
-    let proxy_url = std::env::var("PROXY_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
-
     let state = Arc::new(AppState {
         model: semantic_model,
         history: Mutex::new(HashMap::new()),
-        http_client: Client::new(),
-        proxy_url,
     });
 
     let app = Router::new()
@@ -73,7 +64,7 @@ async fn main() {
 async fn handle_analyze(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AnalyzePayload>,
-) -> &'static str {
+) -> Json<AnalyzeResponse> {
     let concat_text = format!(
         "Tool: {} | Error: {}",
         payload.tool_call, payload.llm_error_response
@@ -83,7 +74,7 @@ async fn handle_analyze(
         Ok(emb) => emb,
         Err(e) => {
             eprintln!("Embedding failed: {}", e);
-            return "Error";
+            return Json(AnalyzeResponse { loop_detected: false });
         }
     };
 
@@ -94,7 +85,6 @@ async fn handle_analyze(
 
     for past_embedding in session_history.iter() {
         if let Ok(similarity) = model::cosine_similarity(&embedding, past_embedding) {
-            println!("Debug: Similarity between current and past call: {}", similarity);
             if similarity > SIMILARITY_THRESHOLD {
                 loop_detected = true;
                 break;
@@ -107,19 +97,9 @@ async fn handle_analyze(
         session_history.pop_front();
     }
 
-    drop(history);
-
     if loop_detected {
-        println!("Semantic loop detected for session {}", payload.session_id);
-        let block_payload = BlockRulePayload {
-            session_id: payload.session_id,
-            tool_call: payload.tool_call,
-            reason: "Semantic loop detected".to_string(),
-        };
-
-        let url = format!("{}/v1/internal/block_rule", state.proxy_url);
-        let _ = state.http_client.post(&url).json(&block_payload).send().await;
+        println!("Semantic loop detected: session={} tool={}", payload.session_id, payload.tool_call);
     }
 
-    "Analyzed"
+    Json(AnalyzeResponse { loop_detected })
 }

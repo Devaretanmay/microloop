@@ -4,7 +4,9 @@ use axum::{
 };
 use std::env;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 
+mod blocklist;
 mod proxy;
 
 #[tokio::main]
@@ -25,41 +27,37 @@ async fn main() {
     });
     println!("Microloop core initialized.");
 
-    let (sidecar_tx, mut sidecar_rx) = tokio::sync::mpsc::channel::<proxy::AnalyzePayload>(1000);
+    let redis_url = env::var("REDIS_URL").unwrap_or_default();
+    let semantic_blocklist: Arc<dyn crate::blocklist::BlocklistStore> = if redis_url.is_empty() {
+        Arc::new(crate::blocklist::InMemoryBlocklist::new())
+    } else {
+        Arc::new(crate::blocklist::RedisBlocklist::new(&redis_url).unwrap())
+    };
+
+    let sidecar_url = env::var("SIDECAR_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
 
     let state = proxy::AppState {
-        microloop_state: std::sync::Arc::new(std::sync::Mutex::new(microloop_state)),
-        semantic_blocklist: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        microloop_state: Arc::new(Mutex::new(microloop_state)),
+        semantic_blocklist,
         target_base_url: env::var("TARGET_API_URL")
             .unwrap_or_else(|_| "https://api.openai.com".to_string()),
         api_key: env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
             eprintln!("Warning: OPENAI_API_KEY not set, upstream requests will likely 401");
             String::new()
         }),
-        sidecar_tx,
+        sidecar_url,
+        http_client: reqwest::Client::new(),
     };
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    println!("Microloop proxy listening on {}", addr);
 
     let app = Router::new()
         .route("/v1/chat/completions", post(proxy::handle_proxy_request))
         .route("/v1/messages", post(proxy::handle_proxy_request))
-        .route("/v1/internal/block_rule", post(proxy::handle_block_rule))
         .route("/", get(|| async { "Microloop Proxy Running" }))
-        .with_state(state.clone());
-
-    tokio::spawn(async move {
-        let client = reqwest::Client::new();
-        let sidecar_url = std::env::var("SIDECAR_URL").unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
-        
-        while let Some(payload) = sidecar_rx.recv().await {
-            let _ = client.post(format!("{}/analyze", sidecar_url))
-                .json(&payload)
-                .send()
-                .await;
-        }
-    });
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    println!("Microloop proxy listening on {}", addr);
+        .with_state(state);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(l) => l,

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "code-quality-expert": {
+      "source": "oimiragieo/agent-studio",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/code-quality-expert/SKILL.md",
+      "computedHash": "f8034d2e7ad257c70319455846d1fb0b8185be2de3ccc22d5cabd31eae91cd74"
+    }
+  }
+}

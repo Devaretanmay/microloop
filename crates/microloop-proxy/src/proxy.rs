@@ -10,10 +10,9 @@ use axum::{
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc::Sender;
 
 #[derive(Serialize)]
 pub struct AnalyzePayload {
@@ -23,36 +22,22 @@ pub struct AnalyzePayload {
 }
 
 #[derive(Deserialize)]
-pub struct BlockRulePayload {
-    pub session_id: String,
-    pub tool_call: String,
-    pub reason: String,
+struct SidecarResponse {
+    loop_detected: bool,
 }
 
 #[derive(Clone)]
 pub struct AppState {
     pub microloop_state: Arc<Mutex<microloop::state::MicroloopState>>,
-    pub semantic_blocklist: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    pub semantic_blocklist: std::sync::Arc<dyn crate::blocklist::BlocklistStore>,
     pub target_base_url: String,
     pub api_key: String,
-    pub sidecar_tx: Sender<AnalyzePayload>,
+    pub sidecar_url: String,
+    pub http_client: Client,
 }
 
-pub async fn handle_block_rule(
-    State(state): State<AppState>,
-    axum::Json(payload): axum::Json<BlockRulePayload>,
-) -> impl IntoResponse {
-    let mut blocklist = state.semantic_blocklist.lock().unwrap();
-    blocklist
-        .entry(payload.session_id.clone())
-        .or_insert_with(HashSet::new)
-        .insert(payload.tool_call.clone());
-    
-    println!("Proxy received semantic block rule for session {} on tool '{}': {}", payload.session_id, payload.tool_call, payload.reason);
-    StatusCode::OK
-}
 
-pub fn intercept_tool_calls(
+pub async fn intercept_tool_calls(
     session_id: &str,
     request_body: &Value,
     response: &mut Value,
@@ -130,23 +115,31 @@ pub fn intercept_tool_calls(
     for (name, arguments_str, arguments_val) in parsed_tool_calls {
         
         // 1. Check Semantic Blocklist first
-        {
-            let blocklist = app_state.semantic_blocklist.lock().unwrap();
-            if let Some(session_blocks) = blocklist.get(session_id) {
-                if session_blocks.contains(&name) {
-                    eprintln!("Semantic Loop Blocked: tool {}", name);
-                    block_response(response, is_anthropic, format!("Semantic loop detected on tool '{}'", name));
-                    return;
-                }
-            }
+        if app_state.semantic_blocklist.is_blocked(session_id, &name).await.unwrap_or(false) {
+            eprintln!("Semantic Loop Blocked: tool {}", name);
+            block_response(response, is_anthropic, format!("Semantic loop detected on tool '{}'", name));
+            return;
         }
         
-        let payload = AnalyzePayload {
+        let analyze_payload = AnalyzePayload {
             session_id: session_id.to_string(),
             tool_call: format!("{}({})", name, arguments_str),
             llm_error_response: llm_error_response.clone(),
         };
-        let _ = app_state.sidecar_tx.try_send(payload);
+
+        // Synchronous sidecar check — block inline if semantic loop detected
+        if !app_state.sidecar_url.is_empty() {
+            let url = format!("{}/analyze", app_state.sidecar_url);
+            if let Ok(resp) = app_state.http_client.post(&url).json(&analyze_payload).send().await {
+                if let Ok(sidecar_resp) = resp.json::<SidecarResponse>().await {
+                    if sidecar_resp.loop_detected {
+                        eprintln!("Semantic Loop Blocked (sync): tool {}", name);
+                        block_response(response, is_anthropic, format!("Semantic loop detected on tool '{}'", name));
+                        return;
+                    }
+                }
+            }
+        }
 
         let mut state = app_state.microloop_state.lock().unwrap();
 
@@ -183,6 +176,7 @@ pub fn intercept_tool_calls(
 
         let mut match_count = 0;
         let mut error_count = 0;
+        let mut auto_inferred_volatile = HashSet::new();
 
         for (prior_call, prior_res) in &prior_outcomes {
             if prior_call.name == name {
@@ -193,8 +187,43 @@ pub fn intercept_tool_calls(
                     if microloop::history::is_error_response(&prior_res.content, error_cfg) {
                         error_count += 1;
                     }
+                } else if let (Value::Object(p_map), Value::Object(c_map)) = (&prior_args, &current_args) {
+                    let mut diffs = Vec::new();
+                    for (k, v) in c_map {
+                        if p_map.get(k) != Some(v) { diffs.push(k.clone()); }
+                    }
+                    for (k, _) in p_map {
+                        if !c_map.contains_key(k) && !diffs.contains(k) { diffs.push(k.clone()); }
+                    }
+                    if diffs.len() == 1 {
+                        auto_inferred_volatile.insert(diffs[0].clone());
+                    }
                 }
             }
+        }
+
+        if !auto_inferred_volatile.is_empty() {
+            let mut combined_volatile = volatile_fields.clone();
+            combined_volatile.extend(auto_inferred_volatile.into_iter());
+            
+            match_count = 0;
+            error_count = 0;
+            let mut new_current_args = arguments_val.clone();
+            microloop::canonical::strip_volatile_fields(&mut new_current_args, &combined_volatile);
+            
+            for (prior_call, prior_res) in &prior_outcomes {
+                if prior_call.name == name {
+                    let mut prior_args = prior_call.arguments.clone();
+                    microloop::canonical::strip_volatile_fields(&mut prior_args, &combined_volatile);
+                    if prior_args == new_current_args {
+                        match_count += 1;
+                        if microloop::history::is_error_response(&prior_res.content, error_cfg) {
+                            error_count += 1;
+                        }
+                    }
+                }
+            }
+            eprintln!("Volatile Auto-Inference activated. Masking fields: {:?}", combined_volatile);
         }
 
         let count = match count_mode {
@@ -202,7 +231,13 @@ pub fn intercept_tool_calls(
             microloop::config::CountMode::ErrorsOnly => error_count,
         };
 
-        let res = if count >= max_repeats {
+        // Adaptive Thresholding
+        if error_count > 0 {
+            // Fail fast if the loop involves errors
+            max_repeats = max_repeats.saturating_sub(1).max(2);
+        }
+
+        let res = if count + 1 >= max_repeats {
             2
         } else {
             match state.engine.validate(&arguments_str) {
@@ -233,7 +268,7 @@ pub fn intercept_tool_calls(
         );
 
         if res != 0 {
-            let err_str = if count >= max_repeats {
+            let err_str = if count + 1 >= max_repeats {
                 format!(
                     "Trajectory blocked by stateless history. Seen {} times, {} errors. Limit: {}",
                     match_count, error_count, max_repeats
@@ -367,7 +402,7 @@ pub async fn handle_proxy_request(
         .unwrap_or("default_session")
         .to_string();
 
-    intercept_tool_calls(&session_id, &body, &mut response_json, &state);
+    intercept_tool_calls(&session_id, &body, &mut response_json, &state).await;
 
     if stream_requested {
         let sse_stream = stream! {
@@ -384,5 +419,65 @@ pub async fn handle_proxy_request(
         Sse::new(sse_stream).into_response()
     } else {
         axum::Json(response_json).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use microloop::state::MicroloopState;
+    use std::sync::{Arc, Mutex};
+    use crate::blocklist::InMemoryBlocklist;
+
+    #[tokio::test]
+    async fn test_volatile_auto_inference() {
+        let state = microloop::state::MicroloopState::new("max_repeats: 3\n").unwrap();
+        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+        let app_state = AppState {
+            microloop_state: Arc::new(Mutex::new(state)),
+            semantic_blocklist: Arc::new(InMemoryBlocklist::new()),
+            target_base_url: "".to_string(),
+            api_key: "".to_string(),
+            sidecar_tx: tx,
+        };
+
+        let request_body = json!({
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_1", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"hello\", \"req_id\": 1}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_1", "content": "Result 1"},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_2", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"hello\", \"req_id\": 2}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_2", "content": "Result 2"}
+            ]
+        });
+
+        let mut response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {"function": {"name": "search", "arguments": "{\"query\": \"hello\", \"req_id\": 3}"}}
+                    ]
+                }
+            }]
+        });
+
+        // 3rd call is made. The first 2 calls are in the request history.
+        // req_id changes every time (1, 2, 3).
+        // Without auto-inference, this is NOT a loop (arguments differ).
+        // With auto-inference, it strips req_id, sees "query": "hello" repeated 3 times, and blocks it!
+        
+        intercept_tool_calls("session_1", &request_body, &mut response, &app_state).await;
+
+        let content = response["choices"][0]["message"]["content"].as_str().unwrap_or("");
+        assert!(content.contains("SYSTEM INTERCEPT"), "Proxy did not intercept! Content: {}", content);
     }
 }
