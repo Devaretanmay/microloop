@@ -28,10 +28,12 @@ async fn main() {
     println!("Microloop core initialized.");
 
     let redis_url = env::var("REDIS_URL").unwrap_or_default();
-    let semantic_blocklist: Arc<dyn crate::blocklist::BlocklistStore> = if redis_url.is_empty() {
-        Arc::new(crate::blocklist::InMemoryBlocklist::new())
-    } else {
-        Arc::new(crate::blocklist::RedisBlocklist::new(&redis_url).unwrap())
+    let semantic_blocklist: Arc<dyn crate::blocklist::BlocklistStore> = match crate::blocklist::RedisBlocklist::new(&redis_url) {
+        Ok(redis_blocklist) => Arc::new(redis_blocklist),
+        Err(e) => {
+            eprintln!("Warning: Failed to connect to Redis ({}), falling back to in-memory blocklist", e);
+            Arc::new(crate::blocklist::InMemoryBlocklist::new())
+        }
     };
 
     let sidecar_url = env::var("SIDECAR_URL")

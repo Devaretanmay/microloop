@@ -10,7 +10,7 @@ use axum::{
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 
@@ -130,14 +130,16 @@ pub async fn intercept_tool_calls(
         // Synchronous sidecar check — block inline if semantic loop detected
         if !app_state.sidecar_url.is_empty() {
             let url = format!("{}/analyze", app_state.sidecar_url);
-            if let Ok(resp) = app_state.http_client.post(&url).json(&analyze_payload).send().await {
-                if let Ok(sidecar_resp) = resp.json::<SidecarResponse>().await {
-                    if sidecar_resp.loop_detected {
-                        eprintln!("Semantic Loop Blocked (sync): tool {}", name);
-                        block_response(response, is_anthropic, format!("Semantic loop detected on tool '{}'", name));
-                        return;
-                    }
-                }
+            let loop_detected = async {
+                let resp = app_state.http_client.post(&url).json(&analyze_payload).send().await.ok()?;
+                let result = resp.json::<SidecarResponse>().await.ok()?;
+                Some(result.loop_detected)
+            }.await.unwrap_or(false);
+
+            if loop_detected {
+                eprintln!("Semantic Loop Blocked (sync): tool {}", name);
+                block_response(response, is_anthropic, format!("Semantic loop detected on tool '{}'", name));
+                return;
             }
         }
 
@@ -177,6 +179,7 @@ pub async fn intercept_tool_calls(
         let mut match_count = 0;
         let mut error_count = 0;
         let mut auto_inferred_volatile = HashSet::new();
+        let mut field_diff_counts: HashMap<String, usize> = HashMap::new();
 
         for (prior_call, prior_res) in &prior_outcomes {
             if prior_call.name == name {
@@ -195,6 +198,10 @@ pub async fn intercept_tool_calls(
                     for (k, _) in p_map {
                         if !c_map.contains_key(k) && !diffs.contains(k) { diffs.push(k.clone()); }
                     }
+                    // Track which fields differ to validate auto-inference
+                    for diff in &diffs {
+                        *field_diff_counts.entry(diff.clone()).or_insert(0) += 1;
+                    }
                     if diffs.len() == 1 {
                         auto_inferred_volatile.insert(diffs[0].clone());
                     }
@@ -202,9 +209,19 @@ pub async fn intercept_tool_calls(
             }
         }
 
+        // Validation: Only auto-infer if the field appears volatile in MULTIPLE prior calls
+        // This prevents false positives from single-off comparisons
+        if !auto_inferred_volatile.is_empty() {
+            let min_occurrences = 2; // Field must differ in at least 2 prior calls
+            auto_inferred_volatile.retain(|field| {
+                let count = field_diff_counts.get(field).copied().unwrap_or(0);
+                count >= min_occurrences
+            });
+        }
+
         if !auto_inferred_volatile.is_empty() {
             let mut combined_volatile = volatile_fields.clone();
-            combined_volatile.extend(auto_inferred_volatile.into_iter());
+            combined_volatile.extend(auto_inferred_volatile);
             
             match_count = 0;
             error_count = 0;
@@ -425,20 +442,19 @@ pub async fn handle_proxy_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use microloop::state::MicroloopState;
     use std::sync::{Arc, Mutex};
     use crate::blocklist::InMemoryBlocklist;
 
     #[tokio::test]
     async fn test_volatile_auto_inference() {
         let state = microloop::state::MicroloopState::new("max_repeats: 3\n").unwrap();
-        let (tx, _rx) = tokio::sync::mpsc::channel(100);
         let app_state = AppState {
             microloop_state: Arc::new(Mutex::new(state)),
             semantic_blocklist: Arc::new(InMemoryBlocklist::new()),
             target_base_url: "".to_string(),
             api_key: "".to_string(),
-            sidecar_tx: tx,
+            sidecar_url: "".to_string(), // Empty = no sidecar check
+            http_client: reqwest::Client::new(),
         };
 
         let request_body = json!({
@@ -479,5 +495,223 @@ mod tests {
 
         let content = response["choices"][0]["message"]["content"].as_str().unwrap_or("");
         assert!(content.contains("SYSTEM INTERCEPT"), "Proxy did not intercept! Content: {}", content);
+    }
+
+    #[tokio::test]
+    async fn test_no_false_positive_when_query_changes() {
+        let state = microloop::state::MicroloopState::new("max_repeats: 3\n").unwrap();
+        let app_state = AppState {
+            microloop_state: Arc::new(Mutex::new(state)),
+            semantic_blocklist: Arc::new(InMemoryBlocklist::new()),
+            target_base_url: "".to_string(),
+            api_key: "".to_string(),
+            sidecar_url: "".to_string(),
+            http_client: reqwest::Client::new(),
+        };
+
+        // Agent changes the query AND req_id - should NOT auto-infer volatile
+        let request_body = json!({
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_1", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"hello\", \"req_id\": 1}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_1", "content": "Result 1"},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_2", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"world\", \"req_id\": 2}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_2", "content": "Result 2"}
+            ]
+        });
+
+        let mut response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {"function": {"name": "search", "arguments": "{\"query\": \"foo\", \"req_id\": 3}"}}
+                    ]
+                }
+            }]
+        });
+
+        // 3rd call has different query - should be ALLOWED
+        intercept_tool_calls("session_1", &request_body, &mut response, &app_state).await;
+
+        let tool_calls = response["choices"][0]["message"]["tool_calls"].as_array();
+        assert!(tool_calls.is_some(), "Tool calls were incorrectly removed!");
+        assert!(tool_calls.unwrap().len() > 0, "Tool call was incorrectly blocked!");
+    }
+
+    #[tokio::test]
+    async fn test_blocklist_trait_in_memory() {
+        use crate::blocklist::BlocklistStore;
+        let blocklist = InMemoryBlocklist::new();
+        
+        // Initially nothing is blocked
+        assert!(!blocklist.is_blocked("session_1", "tool_a").await.unwrap());
+        
+        // Add a block
+        blocklist.add_block("session_1", "tool_a").await.unwrap();
+        assert!(blocklist.is_blocked("session_1", "tool_a").await.unwrap());
+        
+        // Different session should not be blocked
+        assert!(!blocklist.is_blocked("session_2", "tool_a").await.unwrap());
+        
+        // Different tool in same session should not be blocked
+        assert!(!blocklist.is_blocked("session_1", "tool_b").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_auto_inference_requires_multiple_diffs() {
+        let state = microloop::state::MicroloopState::new("max_repeats: 3\n").unwrap();
+        let app_state = AppState {
+            microloop_state: Arc::new(Mutex::new(state)),
+            semantic_blocklist: Arc::new(InMemoryBlocklist::new()),
+            target_base_url: "".to_string(),
+            api_key: "".to_string(),
+            sidecar_url: "".to_string(),
+            http_client: reqwest::Client::new(),
+        };
+
+        let request_body = json!({
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_1", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"python\", \"req_id\": 1}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_1", "content": "Result 1"},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_2", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"python\", \"req_id\": 2}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_2", "content": "Result 2"}
+            ]
+        });
+
+        let mut response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {"function": {"name": "search", "arguments": "{\"query\": \"rust\", \"req_id\": 3}"}}
+                    ]
+                }
+            }]
+        });
+
+        // Call 3 has different query, so no auto-inference should occur
+        intercept_tool_calls("session_1", &request_body, &mut response, &app_state).await;
+
+        let tool_calls = response["choices"][0]["message"]["tool_calls"].as_array();
+        assert!(tool_calls.is_some(), "Tool calls should not be removed for non-loop!");
+        assert!(tool_calls.unwrap().len() > 0, "Tool call should not be blocked for genuine change!");
+    }
+
+    #[tokio::test]
+    async fn test_auto_inference_triggers_on_consistent_field() {
+        let state = microloop::state::MicroloopState::new("max_repeats: 3\n").unwrap();
+        let app_state = AppState {
+            microloop_state: Arc::new(Mutex::new(state)),
+            semantic_blocklist: Arc::new(InMemoryBlocklist::new()),
+            target_base_url: "".to_string(),
+            api_key: "".to_string(),
+            sidecar_url: "".to_string(),
+            http_client: reqwest::Client::new(),
+        };
+
+        let request_body = json!({
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_1", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"python\", \"req_id\": 1}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_1", "content": "Result 1"},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_2", "type": "function", "function": {"name": "search", "arguments": "{\"query\": \"python\", \"req_id\": 2}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_2", "content": "Result 2"}
+            ]
+        });
+
+        let mut response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {"function": {"name": "search", "arguments": "{\"query\": \"python\", \"req_id\": 3}"}}
+                    ]
+                }
+            }]
+        });
+
+        // Call 3 should be blocked - req_id differed in 2 prior calls (meets min_occurrences=2)
+        intercept_tool_calls("session_1", &request_body, &mut response, &app_state).await;
+
+        let content = response["choices"][0]["message"]["content"].as_str().unwrap_or("");
+        assert!(content.contains("SYSTEM INTERCEPT"), "Should auto-infer req_id as volatile and block loop!");
+    }
+
+    #[tokio::test]
+    async fn test_adaptive_thresholding_reduces_repeats() {
+        let state = microloop::state::MicroloopState::new(
+            "max_repeats: 3\nrules:\n  - type: regex\n    pattern: \"error\"\n"
+        ).unwrap();
+        let app_state = AppState {
+            microloop_state: Arc::new(Mutex::new(state)),
+            semantic_blocklist: Arc::new(InMemoryBlocklist::new()),
+            target_base_url: "".to_string(),
+            api_key: "".to_string(),
+            sidecar_url: "".to_string(),
+            http_client: reqwest::Client::new(),
+        };
+
+        let request_body = json!({
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_1", "type": "function", "function": {"name": "api_call", "arguments": "{\"endpoint\": \"/fail\"}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_1", "content": "{\"error\": \"failed\"}"},
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_2", "type": "function", "function": {"name": "api_call", "arguments": "{\"endpoint\": \"/fail\"}"}}
+                    ]
+                },
+                {"role": "tool", "tool_call_id": "call_2", "content": "{\"error\": \"failed\"}"}
+            ]
+        });
+
+        let mut response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {"function": {"name": "api_call", "arguments": "{\"endpoint\": \"/fail\"}"}}
+                    ]
+                }
+            }]
+        });
+
+        // With 2 errors → effective max_repeats=2 (not 3)
+        // 2 prior calls + current = triggers at count+1 >= 2
+        intercept_tool_calls("session_1", &request_body, &mut response, &app_state).await;
+
+        let content = response["choices"][0]["message"]["content"].as_str().unwrap_or("");
+        assert!(content.contains("SYSTEM INTERCEPT") || content.contains("Trajectory blocked"), 
+            "Should block with adaptive threshold when errors present. Content: {}", content);
     }
 }

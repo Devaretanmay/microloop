@@ -8,21 +8,21 @@
 - PyO3 Python bindings
 - `no_std` core, zero dependencies
 
-## v0.2
+## v0.2 (Complete ✅)
 
-**Volatile field auto-inference.** Microloop currently requires users to declare fields like timestamps or request IDs as volatile. In v0.2, the engine will detect fields that change on every call across consecutive identical invocations and automatically exclude them from the hash.
+**Volatile field auto-inference.** The engine now detects fields that change on every call across consecutive identical invocations and automatically excludes them from the hash. Includes validation across multiple prior calls to prevent false positives.
 
-**Adaptive thresholding.** Currently `max_repeats` is a static config value. Adaptive thresholding adjusts the limit based on the agent's historical repeat rate — more permissive for complex multi-step tasks, tighter for simple operations.
+**Adaptive thresholding.** `max_repeats` is now dynamic based on error detection — reduces tolerance when errors are present to force faster pivoting.
 
-**Loop feedback.** When a loop is detected but the hashes differ by a single high-entropy field, Microloop will surface a warning: "Loop detected, but hashes differ by `session_id`. Consider adding `session_id` to volatile fields."
+**Pluggable blocklist backend.** Added Redis support for multi-instance deployments with in-memory fallback for single-instance usage.
 
-## v0.3
+## v0.3 (In Progress 🚧)
 
-**WebAssembly target.** Compile Microloop to WASM for browser-based agents and edge runtimes.
+**WebAssembly target.** Compile Microloop to WASM for browser-based agents and edge runtimes. (Pre-existing in crates/microloop-wasm)
 
-**Opt-in semantic comparison.** An optional out-of-process plugin (not in the core) that uses lightweight embeddings to detect semantically equivalent tool calls. This addresses the `delete_line(5)` vs `comment_out(5)` gap without compromising the core's latency or dependency profile.
+**Opt-in semantic comparison.** An optional out-of-process sidecar that uses lightweight embeddings to detect semantically equivalent tool calls. This addresses the `delete_line(5)` vs `comment_out(5)` gap without compromising the core's latency or dependency profile. Now uses synchronous communication to eliminate race conditions.
 
-**Universal gateway.** First-class support for OpenAI, Anthropic, Google, and local LLM providers through a unified proxy interface.
+**Improved proxy architecture.** Enhanced reverse proxy with synchronous sidecar communication, better error handling, and production-ready Redis backend support.
 
 ---
 

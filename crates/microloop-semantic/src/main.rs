@@ -84,11 +84,12 @@ async fn handle_analyze(
     let mut loop_detected = false;
 
     for past_embedding in session_history.iter() {
-        if let Ok(similarity) = model::cosine_similarity(&embedding, past_embedding) {
-            if similarity > SIMILARITY_THRESHOLD {
-                loop_detected = true;
-                break;
-            }
+        if model::cosine_similarity(&embedding, past_embedding)
+            .map(|s| s > SIMILARITY_THRESHOLD)
+            .unwrap_or(false)
+        {
+            loop_detected = true;
+            break;
         }
     }
 

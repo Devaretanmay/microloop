@@ -60,7 +60,7 @@ Comparatively, detecting a loop via LLM prompt ("you are looping, please stop") 
 
 ```toml
 [dependencies]
-microloop = "0.1.1"
+microloop = "0.2.0"
 ```
 
 ### Python
@@ -108,14 +108,66 @@ The core is `no_std` Rust with a C ABI. No Python runtime, no container, no exte
 
 ## Known Limits
 
-**Syntactic, not semantic.** Microloop compares exact tool arguments. Two distinct actions that produce the same failure — `delete_line(5)` vs `comment_out(5)` — produce different hashes and won't be detected as a loop. Semantic comparison would require embeddings, pushing latency from 480 ns to 10+ ms and adding a 100+ MB model dependency. We chose speed and determinism for v0.1.
+**Syntactic, not semantic (v0.1).** Microloop compares exact tool arguments. Two distinct actions that produce the same failure — `delete_line(5)` vs `comment_out(5)` — produce different hashes and won't be detected as a loop. Semantic comparison is available via the optional sidecar (see v0.3 features below).
 
-**Volatile fields are manual.** Fields like timestamps or request IDs that change on every call must be declared in config. Auto-inference is planned for v0.2.
+**Semantic sidecar requires separate process.** The optional semantic loop detection uses an out-of-process sidecar with embedding models. This is opt-in and doesn't affect the core's latency or dependency profile.
 
 **Proxy mode adds one moving part.** The reverse proxy is the simplest integration path for OpenAI-compatible agents. For direct integration, use the Rust crate or Python bindings instead.
 
 ---
 
+
+## New in v0.2 (Now Available!)
+
+**✅ Volatile Field Auto-Inference** — No more manual config! Microloop now automatically detects high-entropy fields (like `req_id`, `timestamp`) that change on every call and excludes them from loop detection. It validates across multiple prior calls to prevent false positives.
+
+```yaml
+# Before (manual config required)
+tools:
+  - name: search
+    volatile_fields: ["req_id", "timestamp"]
+
+# After (auto-inference enabled by default in proxy mode)
+tools:
+  - name: search
+    # No volatile_fields needed - Microloop detects them automatically!
+```
+
+**✅ Adaptive Thresholding** — `max_repeats` is now dynamic. When errors are detected in the loop trajectory, Microloop reduces the tolerance to force faster pivoting:
+
+- Normal mode: `max_repeats: 3` (allows 3 attempts)
+- Error mode: Automatically reduces to `max_repeats: 2` (fail-fast)
+
+**✅ Pluggable Blocklist Backend** — Semantic block rules now support Redis for multi-instance deployments:
+
+```bash
+# In-memory (default, single instance)
+REDIS_URL=
+
+# Redis (production, load-balanced)
+REDIS_URL=redis://localhost:6379
+```
+
+---
+
+## New in v0.3 (Experimental)
+
+**✅ Semantic Loop Detection (Sidecar)** — Optional out-of-process sidecar that uses lightweight embeddings to catch semantic loops like `delete_line(5)` → `comment_out(5)` → `remove_line(5)`. The sidecar operates on the Fast Path / Slow Path architecture:
+
+- **Fast Path (Core):** ~480 ns syntactic detection (unchanged)
+- **Slow Path (Sidecar):** ~10-50 ms semantic analysis (async, non-blocking)
+
+```bash
+# Start the semantic sidecar (optional)
+cargo run -p microloop-semantic
+
+# Proxy automatically sends tool calls to sidecar for analysis
+SIDECAR_URL=http://localhost:8081 cargo run -p microloop-proxy
+```
+
+**✅ Synchronous Sidecar Communication** — The proxy now makes synchronous HTTP calls to the sidecar, ensuring semantic block rules are applied before the LLM response is returned. No more race conditions!
+
+---
 ## Roadmap
 
 | Version | Focus |
