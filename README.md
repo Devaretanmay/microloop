@@ -4,8 +4,11 @@
 
 **Stop burning API credits on loops your AI agent shouldn't be running.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-red.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/microloop)](https://crates.io/crates/microloop)
+[![PyPI](https://img.shields.io/pypi/v/microloop)](https://pypi.org/project/microloop/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/microloop)](https://pypi.org/project/microloop/)
+[![CI](https://github.com/Devaretanmay/microloop/actions/workflows/ci.yml/badge.svg)](https://github.com/Devaretanmay/microloop/actions)
 [![Docs](https://img.shields.io/badge/docs-rs-rust?style=flat&logo=rust)](https://docs.rs/microloop)
 
 **Rust · Python · C · Proxy · WASM**
@@ -199,4 +202,4 @@ Found a vulnerability? Email the maintainers directly—don't file a public issu
 
 ## License
 
-MIT — free for personal, commercial, and enterprise use.
+Apache 2.0 — free for personal, commercial, and enterprise use.

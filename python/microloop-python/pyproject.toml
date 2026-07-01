@@ -5,14 +5,28 @@ build-backend = "maturin"
 [project]
 name = "microloop"
 version = "0.1.1"
-description = "Ultra-fast runtime safety layer for autonomous agents"
+description = "Ultra-fast runtime safety layer for autonomous agents — detects agent tool call loops before they burn API credits"
 authors = [{ name = "Microloop Team" }]
 license = "Apache-2.0"
+readme = "README.md"
 requires-python = ">=3.8"
+homepage = "https://github.com/Devaretanmay/microloop"
+repository = "https://github.com/Devaretanmay/microloop"
+keywords = ["agent", "llm", "guardrail", "safety", "loop-detection"]
 classifiers = [
     "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Development Status :: 4 - Beta",
 ]
 
 [tool.maturin]
