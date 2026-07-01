@@ -10,7 +10,6 @@ readme = "README.md"
 keywords = ["agent", "llm", "guardrail", "safety", "loop-detection"]
 categories = ["development-tools::debugging", "web-programming"]
 include = ["src/**/*", "build.rs", "cbindgen.toml", "Cargo.toml", "LICENSE", "README.md"]
-exclude = ["python/", "litellm/"]
 
 [workspace]
 members = ["crates/microloop-proxy", "crates/microloop-semantic", "python/microloop-python", "crates/microloop-wasm"]
