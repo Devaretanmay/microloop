@@ -3,6 +3,9 @@ name = "microloop-semantic"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
+description = "Semantic similarity sidecar for Microloop — catches agents stuck in semantic loops"
+repository = "https://github.com/Devaretanmay/microloop"
+homepage = "https://github.com/Devaretanmay/microloop"
 
 [dependencies]
 axum = "0.8.9"

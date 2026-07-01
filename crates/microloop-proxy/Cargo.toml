@@ -3,6 +3,9 @@ name = "microloop-proxy"
 version = "0.1.1"
 edition = "2024"
 license = "Apache-2.0"
+description = "HTTP proxy runtime for Microloop — intercepts LLM API calls for loop detection"
+repository = "https://github.com/Devaretanmay/microloop"
+homepage = "https://github.com/Devaretanmay/microloop"
 
 [dependencies]
 async-stream = "0.3.6"

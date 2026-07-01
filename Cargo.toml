@@ -3,6 +3,13 @@ name = "microloop"
 version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
+description = "Ultra-fast runtime safety layer for autonomous agents — detects agent tool call loops before they burn API credits"
+repository = "https://github.com/Devaretanmay/microloop"
+homepage = "https://github.com/Devaretanmay/microloop"
+readme = "README.md"
+keywords = ["agent", "llm", "guardrail", "safety", "loop-detection"]
+categories = ["development-tools::debugging", "web-programming"]
+exclude = ["microloop.h", "python/", "litellm/"]
 
 [workspace]
 members = ["crates/microloop-proxy", "crates/microloop-semantic", "python/microloop-python", "crates/microloop-wasm"]
