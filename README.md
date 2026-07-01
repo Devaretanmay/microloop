@@ -118,6 +118,38 @@ result = engine.verify("write_file", '{"path": "/tmp/x.txt"}')
 
 ---
 
+## 🔌 Ecosystem Integrations
+
+Native, high-performance bindings for every major AI framework.
+
+### LiteLLM
+
+Sub-microsecond Rust-backed loop detection for any LiteLLM proxy or client.
+
+```bash
+pip install "microloop[litellm]"
+```
+
+[→ Read the LiteLLM Guide](docs/integrations/litellm.md)
+
+### LangGraph
+
+Loop guard middleware for LangGraph agents.
+
+```bash
+pip install microloop-langgraph
+```
+
+### MCP
+
+Guard every `tools/call` through Microloop's engine.
+
+```bash
+pip install microloop-mcp
+```
+
+---
+
 ## Benchmarks That Matter
 
 | What | Microloop | LLM-Prompted Detection |
