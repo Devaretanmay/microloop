@@ -3,6 +3,7 @@ name = "microloop-python"
 version = "0.1.1"
 edition = "2024"
 publish = false
+license = "Apache-2.0"
 
 [lib]
 name = "microloop_core"

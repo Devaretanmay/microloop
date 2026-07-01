@@ -7,6 +7,7 @@ name = "microloop"
 version = "0.1.1"
 description = "Ultra-fast runtime safety layer for autonomous agents"
 authors = [{ name = "Microloop Team" }]
+license = "Apache-2.0"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",

@@ -2,6 +2,7 @@
 name = "microloop"
 version = "0.2.0"
 edition = "2024"
+license = "Apache-2.0"
 
 [workspace]
 members = ["crates/microloop-proxy", "crates/microloop-semantic", "python/microloop-python", "crates/microloop-wasm"]
