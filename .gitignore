@@ -24,6 +24,9 @@ skills-lock.json
 python/microloop-python/.venv/
 .venv/
 
+# Embedded LiteLLM checkout (never vendor this here)
+litellm/
+
 # Scratch / draft test files
 python/test_v2.py
 python/test_v2_v3.py
