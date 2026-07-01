@@ -15,3 +15,28 @@ hello_microloop/
 # Python builds
 __pycache__/
 *.so
+
+# Agent skills (third-party, not part of project)
+.agents/
+skills-lock.json
+
+# Environment
+python/microloop-python/.venv/
+.venv/
+
+# Scratch / draft test files
+python/test_v2.py
+python/test_v2_v3.py
+
+# Internal planning / scratch docs
+FIXES_APPLIED.md
+*.plan.md
+
+# Generated artifacts
+microloop.h
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
