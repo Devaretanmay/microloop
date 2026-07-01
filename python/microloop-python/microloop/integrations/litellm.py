@@ -28,8 +28,7 @@ except ImportError:
     BadRequestError = None  # type: ignore[assignment,misc]
 
     logging.getLogger(__name__).warning(
-        "LiteLLM is not installed. "
-        "Install it with: pip install 'microloop[litellm]'"
+        "LiteLLM is not installed. Install it with: pip install 'microloop[litellm]'"
     )
 
 # ── Core engine import (always available — microloop is a core dep) ────────────
@@ -40,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── Exception ─────────────────────────────────────────────────────────────────
+
 
 class MicroloopLoopDetected(ValueError):
     """Raised when Microloop detects a repeating tool call trajectory."""
@@ -64,6 +64,7 @@ class MicroloopLoopDetected(ValueError):
 
 
 # ── Guardrail ─────────────────────────────────────────────────────────────────
+
 
 class MicroloopLiteLLMGuardrail(CustomGuardrail):
     """
@@ -116,8 +117,7 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
         self._engines: Dict[str, Microloop] = {}
 
         logger.info(
-            "Microloop LiteLLM guardrail initialised "
-            "(max_repeats=%d, window=%d)",
+            "Microloop LiteLLM guardrail initialised (max_repeats=%d, window=%d)",
             max_repeats,
             history_window,
         )
@@ -125,7 +125,13 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
     # ── Internal helpers ───────────────────────────────────────────────────────
 
     def _get_engine(self, session_id: str) -> Microloop:
-        """Return (or lazily create) a Microloop engine for *session_id*."""
+        """Lazily initialise the Rust engine for a specific session with bounded memory."""
+        # Bounded FIFO eviction: prevent memory leaks from client-controlled session IDs
+        MAX_ENGINES = 1000
+        if len(self._engines) >= MAX_ENGINES and session_id not in self._engines:
+            oldest = next(iter(self._engines))
+            del self._engines[oldest]
+
         if session_id not in self._engines:
             cfg = json.dumps(
                 {
@@ -160,10 +166,19 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
 
     @staticmethod
     def _get_session_id(data: Dict[str, Any]) -> str:
+        """Extract session ID from data, falling back to a per-request UUID
+        to prevent cross-tenant poisoning of the shared 'default' engine."""
         metadata = data.get("metadata") or {}
-        return str(
-            metadata.get("session_id") or data.get("litellm_session_id", "default")
-        )
+        explicit_session = metadata.get("session_id") or data.get("litellm_session_id")
+        if explicit_session:
+            return str(explicit_session)
+
+        # Per-request UUID fallback — avoids the "shared default bucket" vulnerability.
+        # Stateless requests aren't guarded against loops within that single request,
+        # but they will never accidentally block other users' traffic.
+        import uuid
+
+        return f"req_{uuid.uuid4().hex}"
 
     # ── LiteLLM hook ───────────────────────────────────────────────────────────
 
