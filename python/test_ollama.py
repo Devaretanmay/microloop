@@ -90,7 +90,7 @@ def run_agent():
 
         # Check if proxy blocked it!
         if msg.get("content") and "SYSTEM INTERCEPT" in msg.get("content"):
-            print("\n✅ SUCCESS! Semantic loop was successfully detected and blocked by the Proxy Fast-Path!")
+            print("\nSUCCESS! Semantic loop was successfully detected and blocked by the Proxy Fast-Path!")
             break
             
         if "tool_calls" in msg and msg["tool_calls"]:

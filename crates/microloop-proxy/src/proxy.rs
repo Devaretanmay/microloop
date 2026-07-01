@@ -141,15 +141,13 @@ pub fn intercept_tool_calls(
             }
         }
         
-        // 2. Forward to Semantic Sidecar
         let payload = AnalyzePayload {
             session_id: session_id.to_string(),
             tool_call: format!("{}({})", name, arguments_str),
             llm_error_response: llm_error_response.clone(),
         };
-        let _ = app_state.sidecar_tx.try_send(payload); // Silently drop if channel full
+        let _ = app_state.sidecar_tx.try_send(payload);
 
-        // 3. Check Syntactic Core
         let mut state = app_state.microloop_state.lock().unwrap();
 
         let empty_volatile = Vec::new();
@@ -202,7 +200,6 @@ pub fn intercept_tool_calls(
         let count = match count_mode {
             microloop::config::CountMode::All => match_count,
             microloop::config::CountMode::ErrorsOnly => error_count,
-            microloop::config::CountMode::ErrorsOrIdentical => error_count.max(match_count / 2),
         };
 
         let res = if count >= max_repeats {
@@ -232,7 +229,6 @@ pub fn intercept_tool_calls(
                 "verdict": res,
                 "label": label,
                 "stateless_match_count": match_count,
-                "stateless_error_count": error_count,
             })
         );
 
@@ -249,11 +245,7 @@ pub fn intercept_tool_calls(
                     .to_string()
             };
 
-            if is_anthropic {
-                block_response(response, is_anthropic, err_str);
-            } else {
-                block_response(response, is_anthropic, err_str);
-            }
+            block_response(response, is_anthropic, err_str);
             return;
         }
     }
@@ -307,16 +299,11 @@ pub async fn handle_proxy_request(
         path
     };
 
-    let url =
-        if state.target_base_url.ends_with("/openai/v1") && upstream_path == "/chat/completions" {
-            format!("{}/chat/completions", state.target_base_url)
-        } else if state.target_base_url.ends_with("/v1") {
-            format!("{}{}", state.target_base_url, upstream_path)
-        } else if state.target_base_url.ends_with("/openai") {
-            format!("{}{}", state.target_base_url, upstream_path)
-        } else {
-            format!("{}/v1{}", state.target_base_url, upstream_path)
-        };
+    let url = format!(
+        "{}/v1{}",
+        state.target_base_url.trim_end_matches('/'),
+        upstream_path
+    );
 
     let stream_requested = body
         .get("stream")

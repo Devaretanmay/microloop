@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2024"
 
 [workspace]
-members = ["crates/microloop-proxy", "crates/microloop-semantic", "python/microloop-python"]
+members = ["crates/microloop-proxy", "crates/microloop-semantic", "python/microloop-python", "crates/microloop-wasm"]
 
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]

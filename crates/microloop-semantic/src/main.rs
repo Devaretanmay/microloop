@@ -92,7 +92,6 @@ async fn handle_analyze(
 
     let mut loop_detected = false;
 
-    // Check similarity against history
     for past_embedding in session_history.iter() {
         if let Ok(similarity) = model::cosine_similarity(&embedding, past_embedding) {
             println!("Debug: Similarity between current and past call: {}", similarity);
@@ -108,7 +107,6 @@ async fn handle_analyze(
         session_history.pop_front();
     }
 
-    // Release lock before making network call
     drop(history);
 
     if loop_detected {

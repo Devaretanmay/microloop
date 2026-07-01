@@ -17,7 +17,7 @@ impl SemanticModel {
         let repo = Repo::with_revision(
             "sentence-transformers/all-MiniLM-L6-v2".to_string(),
             RepoType::Model,
-            "refs/pr/21".to_string(), // Use the safetensors revision
+            "refs/pr/21".to_string(),
         );
         
         println!("Loading model from Hugging Face Hub (this may download weights on first run)...");
@@ -70,11 +70,9 @@ impl SemanticModel {
         let token_type_ids = token_ids.zeros_like()?;
         let embeddings = self.model.forward(&token_ids, &token_type_ids, None)?;
         
-        // Mean pooling
         let (_n_sentence, n_tokens, _hidden_size) = embeddings.dims3()?;
         let embeddings = (embeddings.sum(1)? / (n_tokens as f64))?;
         
-        // L2 normalization
         let norm = embeddings.sqr()?.sum_keepdim(1)?.sqrt()?;
         let normalized = embeddings.broadcast_div(&norm)?;
         

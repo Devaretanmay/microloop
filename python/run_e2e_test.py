@@ -42,9 +42,9 @@ def run_test():
     print("Response 3:", json.dumps(res3, indent=2))
     
     if "SYSTEM INTERCEPT" in str(res3):
-        print("\n✅ SUCCESS! Semantic loop was successfully detected by Sidecar and blocked by the Proxy Fast-Path!")
+        print("\nSUCCESS! Semantic loop was successfully detected by Sidecar and blocked by the Proxy Fast-Path!")
     else:
-        print("\n❌ FAILURE! Proxy did not block the semantic loop.")
+        print("\nFAILURE! Proxy did not block the semantic loop.")
 
 if __name__ == "__main__":
     run_test()

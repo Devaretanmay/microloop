@@ -46,7 +46,6 @@ async fn main() {
         .route("/", get(|| async { "Microloop Proxy Running" }))
         .with_state(state.clone());
 
-    // Background task to send payloads to sidecar
     tokio::spawn(async move {
         let client = reqwest::Client::new();
         let sidecar_url = std::env::var("SIDECAR_URL").unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());

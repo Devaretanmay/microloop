@@ -34,7 +34,6 @@ pub enum CountMode {
     #[default]
     All,
     ErrorsOnly,
-    ErrorsOrIdentical,
 }
 
 #[derive(Deserialize, Debug, Clone)]
