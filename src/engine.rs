@@ -1,7 +1,3 @@
-extern crate alloc;
-
-use alloc::string::String;
-use alloc::vec::Vec;
 use regex::Regex;
 use serde_json::Value;
 
@@ -62,7 +58,7 @@ impl RuleEngine {
             match rule {
                 RuleConfig::Regex { pattern } => {
                     let r =
-                        Regex::new(&pattern).map_err(|e| alloc::format!("Regex error: {}", e))?;
+                        Regex::new(&pattern).map_err(|e| format!("Regex error: {}", e))?;
                     compiled_rules.push(CompiledRule::Regex(r));
                 }
                 RuleConfig::Exact { value } => {

@@ -1,6 +1,3 @@
-use alloc::string::String;
-use alloc::string::ToString;
-use alloc::vec::Vec;
 use serde_json::Value;
 
 pub fn strip_volatile_fields(value: &mut Value, paths: &[String]) {
@@ -10,7 +7,7 @@ pub fn strip_volatile_fields(value: &mut Value, paths: &[String]) {
             continue;
         }
         let (last, parent_segs) = segments.split_last().unwrap();
-        let parent_path = alloc::format!("/{}", parent_segs.join("/"));
+        let parent_path = format!("/{}", parent_segs.join("/"));
 
         let target = if parent_segs.is_empty() {
             Some(&mut *value)

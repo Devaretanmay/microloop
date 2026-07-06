@@ -1,8 +1,6 @@
-use alloc::collections::BTreeMap;
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
 use regex::Regex;
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 use crate::config::ErrorDetectionCfg;
 
@@ -112,8 +110,8 @@ pub fn pair_tool_calls(messages: &[Value]) -> Vec<(ToolCallInfo, ToolResult)> {
 }
 
 fn get_json_path_value<'a>(val: &'a Value, path: &str) -> Option<&'a Value> {
-    let pointer_path = if let Some(stripped) = path.strip_prefix("$.") {
-        alloc::format!("/{}", stripped.replace('.', "/"))
+        let pointer_path = if let Some(stripped) = path.strip_prefix("$.") {
+        format!("/{}", stripped.replace('.', "/"))
     } else {
         path.to_string()
     };
@@ -169,7 +167,7 @@ impl HistoryTracker {
         ignore_args: bool,
         max_repeats: usize,
         history_window: Option<usize>,
-    ) -> Result<(), alloc::string::String> {
+    ) -> Result<(), String> {
         let mut repeat_count = 1;
         let window_size = history_window
             .unwrap_or(max_repeats * 2)
@@ -182,10 +180,7 @@ impl HistoryTracker {
         }
 
         if repeat_count >= max_repeats {
-            return Err(alloc::format!(
-                "Agent appears to be looping on tool {}",
-                tool
-            ));
+            return Err(format!("Agent appears to be looping on tool {}", tool));
         }
 
         self.call_history.push((tool.to_string(), args.to_string()));

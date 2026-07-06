@@ -1,7 +1,4 @@
-extern crate alloc;
 
-use alloc::string::String;
-use alloc::vec::Vec;
 
 use crate::config::{MicroloopConfig, MicroloopDefaults, Strictness, ToolConfig};
 use crate::engine::RuleEngine;
@@ -30,9 +27,6 @@ impl MicroloopState {
         let engine = RuleEngine::new(config.rules)?;
         let history = HistoryTracker::new();
 
-        let mut error_buffer = Vec::new();
-        error_buffer.reserve_exact(ERROR_BUF_SIZE);
-
         Ok(Self {
             strictness: config.strictness,
             max_repeats: config.max_repeats,
@@ -40,7 +34,7 @@ impl MicroloopState {
             history_window: config.history_window,
             engine,
             history,
-            error_buffer,
+            error_buffer: Vec::with_capacity(ERROR_BUF_SIZE),
             defaults: config.defaults,
             tools: config.tools,
         })

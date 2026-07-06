@@ -1,8 +1,5 @@
-#![no_std]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(clippy::missing_safety_doc)]
-
-extern crate alloc;
 
 pub mod state;
 
@@ -11,10 +8,7 @@ pub mod config;
 pub mod engine;
 pub mod history;
 
-use alloc::string::ToString;
-use core::ffi::c_char;
-use core::slice;
-use core::str;
+use std::ffi::c_char;
 pub use state::MicroloopState;
 
 #[unsafe(no_mangle)]
@@ -22,18 +16,18 @@ pub extern "C" fn microloop_init(yaml_str: *const u8, yaml_len: usize) -> *mut M
     if yaml_str.is_null() {
         return core::ptr::null_mut();
     }
-    let yaml_slice = unsafe { slice::from_raw_parts(yaml_str, yaml_len) };
-    let yaml_string = match str::from_utf8(yaml_slice) {
+    let yaml_slice = unsafe { std::slice::from_raw_parts(yaml_str, yaml_len) };
+    let yaml_string = match std::str::from_utf8(yaml_slice) {
         Ok(s) => s,
-        Err(_) => return core::ptr::null_mut(),
+        Err(_) => return std::ptr::null_mut(),
     };
 
     match MicroloopState::new(yaml_string) {
         Ok(state) => {
-            let b = alloc::boxed::Box::new(state);
-            alloc::boxed::Box::into_raw(b)
+            let b = Box::new(state);
+            Box::into_raw(b)
         }
-        Err(_) => core::ptr::null_mut(),
+        Err(_) => std::ptr::null_mut(),
     }
 }
 
@@ -52,13 +46,13 @@ pub extern "C" fn microloop_verify(
     let state = unsafe { &mut *state_ptr };
 
     let tool_slice = if !tool_name.is_null() {
-        unsafe { slice::from_raw_parts(tool_name, tool_name_len) }
+        unsafe { std::slice::from_raw_parts(tool_name, tool_name_len) }
     } else {
         &[]
     };
 
     let args_slice = if !args_json.is_null() {
-        unsafe { slice::from_raw_parts(args_json, args_json_len) }
+        unsafe { std::slice::from_raw_parts(args_json, args_json_len) }
     } else {
         &[]
     };
@@ -67,8 +61,8 @@ pub extern "C" fn microloop_verify(
 }
 
 pub fn verify(state: &mut MicroloopState, tool_slice: &[u8], args_slice: &[u8]) -> u8 {
-    let tool_str = str::from_utf8(tool_slice).unwrap_or("").to_string();
-    let args_str = str::from_utf8(args_slice).unwrap_or("").to_string();
+    let tool_str = std::str::from_utf8(tool_slice).unwrap_or("").to_string();
+    let args_str = std::str::from_utf8(args_slice).unwrap_or("").to_string();
 
     if let Err(msg) = state.history.check_loop(
         &tool_str,
@@ -92,11 +86,11 @@ pub fn verify(state: &mut MicroloopState, tool_slice: &[u8], args_slice: &[u8]) 
 #[unsafe(no_mangle)]
 pub extern "C" fn microloop_get_last_error(state_ptr: *mut MicroloopState) -> *const c_char {
     if state_ptr.is_null() {
-        return core::ptr::null();
+        return std::ptr::null();
     }
     let state = unsafe { &*state_ptr };
     if state.error_buffer.is_empty() {
-        return core::ptr::null();
+        return std::ptr::null();
     }
     state.error_buffer.as_ptr() as *const c_char
 }
@@ -105,7 +99,7 @@ pub extern "C" fn microloop_get_last_error(state_ptr: *mut MicroloopState) -> *c
 pub extern "C" fn microloop_free(state_ptr: *mut MicroloopState) {
     if !state_ptr.is_null() {
         unsafe {
-            let _ = alloc::boxed::Box::from_raw(state_ptr);
+            let _ = Box::from_raw(state_ptr);
         }
     }
 }

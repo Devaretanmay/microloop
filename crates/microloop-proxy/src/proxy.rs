@@ -332,8 +332,6 @@ fn block_response(response: &mut Value, is_anthropic: bool, err_str: String) {
     }
 }
 
-    // (Removed AppState definition since we moved it to the top)
-
 pub async fn handle_proxy_request(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -544,7 +542,7 @@ mod tests {
 
         let tool_calls = response["choices"][0]["message"]["tool_calls"].as_array();
         assert!(tool_calls.is_some(), "Tool calls were incorrectly removed!");
-        assert!(tool_calls.unwrap().len() > 0, "Tool call was incorrectly blocked!");
+        assert!(!tool_calls.unwrap().is_empty(), "Tool call was incorrectly blocked!");
     }
 
     #[tokio::test]
@@ -612,7 +610,7 @@ mod tests {
 
         let tool_calls = response["choices"][0]["message"]["tool_calls"].as_array();
         assert!(tool_calls.is_some(), "Tool calls should not be removed for non-loop!");
-        assert!(tool_calls.unwrap().len() > 0, "Tool call should not be blocked for genuine change!");
+        assert!(!tool_calls.unwrap().is_empty(), "Tool call should not be blocked for genuine change!");
     }
 
     #[tokio::test]

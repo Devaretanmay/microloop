@@ -1,7 +1,3 @@
-extern crate alloc;
-
-use alloc::string::String;
-use alloc::vec::Vec;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -91,8 +87,8 @@ pub struct MicroloopConfig {
 }
 
 impl MicroloopConfig {
-    pub fn from_yaml(yaml_str: &str) -> Result<Self, alloc::string::String> {
-        serde_yaml::from_str(yaml_str).map_err(|e| alloc::format!("YAML parsing error: {}", e))
+    pub fn from_yaml(yaml_str: &str) -> Result<Self, String> {
+        serde_yaml::from_str(yaml_str).map_err(|e| format!("YAML parsing error: {}", e))
     }
 }
 
