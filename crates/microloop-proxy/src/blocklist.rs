@@ -37,11 +37,9 @@ impl BlocklistStore for InMemoryBlocklist {
 
     async fn is_blocked(&self, session_id: &str, tool_call: &str) -> Result<bool, String> {
         let blocklist = self.store.lock().unwrap();
-        if let Some(session_blocks) = blocklist.get(session_id) {
-            Ok(session_blocks.contains(tool_call))
-        } else {
-            Ok(false)
-        }
+        Ok(blocklist
+            .get(session_id)
+            .is_some_and(|blocks| blocks.contains(tool_call)))
     }
 }
 

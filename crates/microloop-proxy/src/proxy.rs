@@ -51,17 +51,11 @@ pub async fn intercept_tool_calls(
     let prior_outcomes = microloop::history::pair_tool_calls(messages);
 
     // Build LLM error response string for sidecar
-    let llm_error_response = if let Some(choices) = response.get("choices").and_then(|c| c.as_array()) {
-        if let Some(first) = choices.first() {
-            if let Some(msg) = first.get("message") {
-                if let Some(content) = msg.get("content").and_then(|c| c.as_str()) {
-                    content.to_string()
-                } else {
-                    String::new()
-                }
-            } else { String::new() }
-        } else { String::new() }
-    } else { String::new() };
+    let llm_error_response = response
+        .pointer("/choices/0/message/content")
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
 
     let mut parsed_tool_calls = Vec::new();
     let mut is_anthropic = false;
