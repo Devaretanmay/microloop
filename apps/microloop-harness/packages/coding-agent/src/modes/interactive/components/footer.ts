@@ -144,11 +144,16 @@ export class FooterComponent implements Component {
 			statsParts.push(costStr);
 		}
 
-		// Microloop loop-detection status
+		// Microloop loop-detection status (detailed)
 		const ms = this.session.microloopStatus;
 		if (ms.status !== "idle") {
-			const label = ms.status === "blocked" ? theme.fg("error", "blocked") : theme.fg("warning", "repeat");
-			statsParts.push(label);
+			const statusColor = ms.status === "blocked" ? "error" : "warning";
+			const statusLabel = theme.fg(statusColor, ms.status);
+			const toolName = ms.tool ? theme.fg("text", ms.tool) : "";
+			const matchCount = ms.match_count > 0 ? `${theme.fg("dim", "x")}${theme.fg("text", String(ms.match_count))}` : "";
+			const errorCount = ms.error_count > 0 ? ` ${theme.fg("error", String(ms.error_count))}${theme.fg("dim", "err")}` : "";
+			const parts = [statusLabel, toolName, matchCount, errorCount].filter(Boolean);
+			statsParts.push(parts.join(" "));
 		}
 
 		// Colorize context percentage based on usage

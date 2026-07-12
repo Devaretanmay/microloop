@@ -37,7 +37,7 @@
 		}
 	},
 	"bin": {
-		"pi-ai": "./dist/cli.js"
+		"microloop-ai": "./dist/cli.js"
 	},
 	"files": [
 		"dist",
@@ -78,7 +78,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
+		"url": "git+https://github.com/microloop-ai/microloop.git",
 		"directory": "packages/ai"
 	},
 	"engines": {

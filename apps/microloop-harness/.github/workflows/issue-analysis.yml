@@ -10,9 +10,9 @@
 # intentionally restricted to hardcoded aliases in the authorization step.
 #
 # Setup required before this works:
-#   1. Create a `pi-analyze` GitHub environment on the repo and add a
-#      `PI_AUTH_JSON` secret containing the contents of a pi auth.json
-#      (~/.pi/agent/auth.json).
+#   1. Create a `microloop-analyze` GitHub environment on the repo and add a
+#      `ML_AUTH_JSON` secret containing the contents of the agent auth.json
+#      (~/.microloop/agent/auth.json).
 #   2. Create the `pi-analyze` label.
 #   3. Add a repository secret `EARENDIL_ORG_READ_TOKEN` with permission to
 #      read `earendil-works` org membership. The authorization job uses it to
@@ -30,8 +30,8 @@
 #
 # The session runs in a high-entropy checkout directory so the recorded cwd is
 # a unique string. Import the session into a local checkout with the
-# /ir extension command (.pi/extensions/import-repro.ts):
-#   pi "/ir <gist-id | gist-url | microloop.dev/session URL>"
+# /ir extension command (.microloop/extensions/import-repro.ts):
+#   microloop "/ir <gist-id | gist-url | microloop.dev/session URL>"
 
 name: Issue Analysis
 
@@ -66,7 +66,7 @@ jobs:
           ORG_READ_TOKEN: ${{ secrets.EARENDIL_ORG_READ_TOKEN }}
         with:
           script: |
-            const ANALYZE_LABEL = 'pi-analyze';
+            const ANALYZE_LABEL = 'ml-analyze';
             const TRIGGER_RE = /@issuron\s+analyze\b/i;
             const RUN_ON_TAG_RE = /#run-on-([a-z0-9][a-z0-9_-]*)\b/gi;
             const RUNNER_PROFILES = {
@@ -99,7 +99,7 @@ jobs:
 
             if (context.eventName === 'issues') {
               if (context.payload.action !== 'labeled' || context.payload.label?.name !== ANALYZE_LABEL) {
-                console.log('Not a pi-analyze label event');
+                console.log('Not an ml-analyze label event');
                 return;
               }
             } else if (context.eventName === 'issue_comment') {
@@ -243,7 +243,7 @@ jobs:
     needs: authorize
     if: needs.authorize.outputs.should_run == 'true'
     runs-on: ${{ fromJSON(needs.authorize.outputs.runs_on) }}
-    environment: pi-analyze
+    environment: ml-analyze
     timeout-minutes: 45
     concurrency:
       group: issue-analysis-pi-auth

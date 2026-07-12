@@ -27,19 +27,36 @@ use std::io::{BufRead, BufReader, Read};
 pub use analyzer::LearnedPolicy;
 
 /// Parse a JSONL trajectory stream into entries.
+///
+/// Lines that do not contain a valid `TrajectoryEntry` are silently skipped
+/// (with a warning printed to stderr). This allows mixing trajectory data
+/// with other JSONL content, such as session headers or arbitrary session entries.
 pub fn parse_jsonl(input: impl Read) -> Result<Vec<TrajectoryEntry>, String> {
     let reader = BufReader::new(input);
     let mut entries = Vec::new();
+    let mut skipped = 0usize;
 
     for (i, line) in reader.lines().enumerate() {
-        let line = line.map_err(|e| format!("Line {}: {e}", i + 1))?;
+        let line_num = i + 1;
+        let line = line.map_err(|e| format!("Line {}: {e}", line_num))?;
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with("//") || trimmed.starts_with('#') {
             continue;
         }
-        let entry: TrajectoryEntry =
-            serde_json::from_str(trimmed).map_err(|e| format!("Line {}: {e}", i + 1))?;
-        entries.push(entry);
+        match serde_json::from_str::<TrajectoryEntry>(trimmed) {
+            Ok(entry) => entries.push(entry),
+            Err(e) => {
+                eprintln!("[microloop-learn] Skipping line {}: {}", line_num, e);
+                skipped += 1;
+            }
+        }
+    }
+
+    if skipped > 0 {
+        eprintln!(
+            "[microloop-learn] Skipped {} line(s) that were not valid trajectory entries.",
+            skipped
+        );
     }
 
     Ok(entries)

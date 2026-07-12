@@ -324,7 +324,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 			}
 			updateTarget = { type: "extensions", source: extensionFlagSource };
 		} else if (source) {
-			const sourceIsSelf = source === "self" || source === "pi";
+			const sourceIsSelf = source === "self" || source === "microloop";
 			if (sourceIsSelf) {
 				updateTarget = extensionsFlag ? { type: "all" } : { type: "self" };
 			} else {
@@ -439,18 +439,18 @@ Options:
 	// Source: apps/microloop-harness/packages/coding-agent/src/package-manager-cli.ts
 	// Target: <project_root>/target/<profile>/microloop-learn (5 levels up from src/)
 	const __dirname = path.dirname(new URL(import.meta.url).pathname);
-	const learnPathRelease = path.resolve(__dirname, "../../../../../target/release/microloop-learn");
 	const learnPathDebug = path.resolve(__dirname, "../../../../../target/debug/microloop-learn");
+	const learnPathRelease = path.resolve(__dirname, "../../../../../target/release/microloop-learn");
 
 	let learnPath: string;
 	try {
-		if (fs.existsSync(learnPathRelease)) {
-			learnPath = learnPathRelease;
-		} else if (fs.existsSync(learnPathDebug)) {
+		if (fs.existsSync(learnPathDebug)) {
 			learnPath = learnPathDebug;
+		} else if (fs.existsSync(learnPathRelease)) {
+			learnPath = learnPathRelease;
 		} else {
 			console.error(chalk.red(`Could not find microloop-learn binary.`));
-			console.error(chalk.dim(`Looked in: ${learnPathRelease}`));
+			console.error(chalk.dim(`Looked in: ${learnPathDebug}`));
 			process.exitCode = 1;
 			return true;
 		}

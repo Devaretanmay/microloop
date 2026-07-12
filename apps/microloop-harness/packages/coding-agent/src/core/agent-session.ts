@@ -157,8 +157,9 @@ export type AgentSessionEvent =
 			willRetry: boolean;
 			errorMessage?: string;
 	  }
-	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
-	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+| { type: "microloop_status_changed"; status: MicroloopStatus };
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
@@ -694,6 +695,7 @@ export class AgentSession {
 					error_count: v.error_count ?? 0,
 					latest_error: v.latest_error ?? "",
 				};
+				this._emit({ type: "microloop_status_changed", status: this._microloopStatus });
 			})
 			.catch(() => {
 				this._microloopStatus = { status: "idle", tool: "", match_count: 0, error_count: 0, latest_error: "" };

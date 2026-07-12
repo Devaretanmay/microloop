@@ -56,6 +56,7 @@ function createSession(options: {
 		modelRegistry: {
 			isUsingOAuth: () => false,
 		},
+		microloopStatus: { status: "idle", tool: "", match_count: 0, error_count: 0, latest_error: "" },
 	};
 
 	return session as unknown as AgentSession;

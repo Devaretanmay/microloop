@@ -116,6 +116,8 @@ import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionInputComponent } from "./components/extension-input.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { FooterComponent, formatTokens } from "./components/footer.ts";
+import { LearnCommandOutput } from "./components/learn-command-output.ts";
+import { LoopDetectionBanner } from "./components/loop-detection-banner.ts";
 import { formatKeyText, keyDisplayText, keyText } from "./components/keybinding-hints.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
@@ -413,6 +415,9 @@ export class InteractiveMode {
 
 	// Messages queued while compaction is running
 	private compactionQueuedMessages: CompactionQueuedMessage[] = [];
+
+	// Microloop loop detection banner
+	private loopDetectionBanner: LoopDetectionBanner | undefined = undefined;
 
 	// Shutdown state
 	private shutdownRequested = false;
@@ -1725,6 +1730,7 @@ export class InteractiveMode {
 		this.streamingComponent = undefined;
 		this.streamingMessage = undefined;
 		this.pendingTools.clear();
+		this.loopDetectionBanner = undefined;
 		this.renderInitialMessages();
 	}
 
@@ -3080,6 +3086,22 @@ export class InteractiveMode {
 				if (!event.success) {
 					this.showError(`Retry failed after ${event.attempt} attempts: ${event.finalError || "Unknown error"}`);
 				}
+				this.ui.requestRender();
+				break;
+			}
+			case "microloop_status_changed": {
+				// Update loop detection banner
+				if (event.status.status !== "idle") {
+					if (!this.loopDetectionBanner) {
+						this.loopDetectionBanner = new LoopDetectionBanner(event.status);
+						this.chatContainer.addChild(this.loopDetectionBanner);
+					} else {
+						this.loopDetectionBanner.update(event.status);
+					}
+				} else if (this.loopDetectionBanner) {
+					this.loopDetectionBanner.update(event.status);
+				}
+				this.footer.invalidate();
 				this.ui.requestRender();
 				break;
 			}
@@ -5343,21 +5365,20 @@ export class InteractiveMode {
 		}
 	}
 
-	private async handleLearnCommand(): Promise<void> {
+		private async handleLearnCommand(): Promise<void> {
 		this.showStatus("Analyzing trajectories...");
 		try {
-			// Find path to microloop-learn
 			const path = await import("node:path");
 			const fs = await import("node:fs");
-			
-			// __dirname is not available in ESM — compute from the module's URL
-			// dist/modes/interactive/interactive-mode.js at runtime. dev mode via tsx uses src/ instead.
+			const os = await import("node:os");
+			const { execFile } = await import("node:child_process");
+			const util = await import("node:util");
+
+			// Find path to microloop-learn binary
 			const dirname = path.dirname(new URL(import.meta.url).pathname);
-			// cli.ts (dist/cli.js) uses ../../../../../ (5 levels up) to reach repo root.
-			// We are at dist/modes/interactive/ or src/modes/interactive/, 2 deeper, so 7 levels up.
 			const learnPathDebug = path.resolve(dirname, "../../../../../../../target/debug/microloop-learn");
 			const learnPathRelease = path.resolve(dirname, "../../../../../../../target/release/microloop-learn");
-			
+
 			let learnPath = learnPathDebug;
 			if (!fs.existsSync(learnPathDebug) && fs.existsSync(learnPathRelease)) {
 				learnPath = learnPathRelease;
@@ -5368,28 +5389,77 @@ export class InteractiveMode {
 				return;
 			}
 
-			// Export current session to temp file
-			const os = await import("node:os");
+			// Extract tool call trajectories from session messages
+			const messages = this.session.state.messages;
+			const trajectories: Array<{ tool: string; args: Record<string, unknown>; result: string | null; error: boolean; ts: number }> = [];
+
+			for (const msg of messages) {
+				if (msg.role === "assistant") {
+					const content = Array.isArray(msg.content) ? msg.content : [];
+					for (const block of content) {
+						if (block.type === "toolCall") {
+							trajectories.push({
+								tool: block.name,
+								args: (block as unknown as Record<string, unknown>).arguments as Record<string, unknown> ?? {},
+								result: null,
+								error: false,
+								ts: msg.timestamp ?? Date.now(),
+							});
+						}
+					}
+				}
+				if (msg.role === "toolResult") {
+					const toolResult = msg as { toolCallId?: string; isError?: boolean; content?: Array<{ text?: string }> };
+					if (toolResult.toolCallId) {
+						const contentText = Array.isArray(toolResult.content)
+							? toolResult.content.map((c) => (c as Record<string, unknown>).text ?? "").join("\n")
+							: "";
+						// Find the corresponding toolCall by scanning backwards
+						for (let j = trajectories.length - 1; j >= 0; j--) {
+							if (trajectories[j].result === null) {
+								trajectories[j].result = contentText;
+								trajectories[j].error = toolResult.isError ?? false;
+								break;
+							}
+						}
+					}
+				}
+			}
+
+			if (trajectories.length === 0) {
+				this.showError("No tool calls found in session. Use the agent first to generate trajectories.");
+				return;
+			}
+
+			// Write trajectory JSONL to temp file
 			const tmpDir = os.tmpdir();
 			const tmpFile = path.join(tmpDir, `microloop-learn-${Date.now()}.jsonl`);
-			this.session.exportToJsonl(tmpFile);
+			const jsonl = trajectories.map((t) => JSON.stringify(t)).join("\n");
+			fs.writeFileSync(tmpFile, jsonl + "\n", "utf-8");
 
 			// Execute learn command
-			const { execFile } = await import("node:child_process");
-			const util = await import("node:util");
 			const execFileAsync = util.promisify(execFile);
-
 			const { stdout } = await execFileAsync(learnPath, ["--input", tmpFile, "--output", "microloop_learned.yaml", "--summarize"]);
 
+			// Validate stdout is non-empty
+			if (!stdout || !stdout.trim()) {
+				this.showError("Learn command produced no output.");
+				return;
+			}
+
+			// Render the learn output using LearnCommandOutput component
 			this.chatContainer.addChild(new Spacer(1));
-			this.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "Microloop Learn")), 1, 0));
-			this.chatContainer.addChild(new Text(stdout.trim(), 1, 0));
+			this.chatContainer.addChild(new LearnCommandOutput(stdout));
 			this.chatContainer.addChild(new Spacer(1));
 			this.ui.requestRender();
 			this.showStatus("Safety policy generated and saved to microloop_learned.yaml");
 
 			// Clean up temp file
-			fs.unlinkSync(tmpFile);
+			try {
+				fs.unlinkSync(tmpFile);
+			} catch {
+				// Ignore cleanup errors
+			}
 		} catch (error) {
 			this.showError(`Learn command failed: ${error instanceof Error ? error.message : "Unknown error"}`);
 		}
