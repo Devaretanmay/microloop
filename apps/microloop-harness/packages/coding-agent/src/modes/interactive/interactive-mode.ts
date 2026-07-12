@@ -5352,11 +5352,10 @@ export class InteractiveMode {
 			
 			// We check relative to __dirname: apps/microloop-harness/packages/coding-agent/dist/modes/interactive
 			// So __dirname is depth 5 inside packages, plus apps/microloop-harness is depth 2 -> total 7.
-			// Actually cli.ts is at dist/cli.js (depth 5 from root) and it uses:
-			// path.resolve(__dirname, "../../../../../target/debug/microloop-proxy")
-			// We are at dist/modes/interactive/interactive-mode.js -> __dirname is one level deeper.
-			const learnPathDebug = path.resolve(__dirname, "../../../../../../target/debug/microloop-learn");
-			const learnPathRelease = path.resolve(__dirname, "../../../../../../target/release/microloop-learn");
+			// cli.ts is at dist/cli.js and uses ../../../../../ (5 levels up) to reach repo root.
+			// We are at dist/modes/interactive/interactive-mode.js, 2 levels deeper, so need 7 levels up.
+			const learnPathDebug = path.resolve(__dirname, "../../../../../../../target/debug/microloop-learn");
+			const learnPathRelease = path.resolve(__dirname, "../../../../../../../target/release/microloop-learn");
 			
 			let learnPath = learnPathDebug;
 			if (!fs.existsSync(learnPathDebug) && fs.existsSync(learnPathRelease)) {
