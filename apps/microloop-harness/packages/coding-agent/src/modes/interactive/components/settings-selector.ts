@@ -80,6 +80,8 @@ export interface SettingsConfig {
 	clearOnShrink: boolean;
 	showTerminalProgress: boolean;
 	warnings: WarningSettings;
+	microloopMaxRepeats: number;
+	microloopCountMode: "errors_only" | "all";
 }
 
 export interface SettingsCallbacks {
@@ -112,6 +114,8 @@ export interface SettingsCallbacks {
 	onShowTerminalProgressChange: (enabled: boolean) => void;
 	onWarningsChange: (warnings: WarningSettings) => void;
 	onCancel: () => void;
+	onMicroloopMaxRepeatsChange: (maxRepeats: number) => void;
+	onMicroloopCountModeChange: (countMode: "errors_only" | "all") => void;
 }
 
 /**
@@ -728,6 +732,23 @@ export class SettingsSelectorComponent extends Container {
 			values: ["true", "false"],
 		});
 
+		// Loop detection settings (insert after terminal-progress)
+		const terminalProgressIndex = items.findIndex((item) => item.id === "terminal-progress");
+		items.splice(terminalProgressIndex + 1, 0, {
+			id: "microloop-max-repeats",
+			label: "Max repeats",
+			description: "Tool call repetitions before loop detection blocks them",
+			currentValue: String(config.microloopMaxRepeats),
+			values: ["2", "3", "5", "10", "20"],
+		});
+		items.splice(terminalProgressIndex + 2, 0, {
+			id: "microloop-count-mode",
+			label: "Loop count mode",
+			description: "Count all repeats or only error repeats for loop detection",
+			currentValue: config.microloopCountMode,
+			values: ["errors_only", "all"],
+		});
+
 		// Add borders
 		this.addChild(new DynamicBorder());
 
@@ -818,6 +839,12 @@ export class SettingsSelectorComponent extends Container {
 						break;
 					case "terminal-progress":
 						callbacks.onShowTerminalProgressChange(newValue === "true");
+						break;
+					case "microloop-max-repeats":
+						callbacks.onMicroloopMaxRepeatsChange(parseInt(newValue, 10));
+						break;
+					case "microloop-count-mode":
+						callbacks.onMicroloopCountModeChange(newValue as "errors_only" | "all");
 						break;
 					case "theme":
 						callbacks.onThemeChange(newValue);

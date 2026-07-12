@@ -4107,6 +4107,8 @@ export class InteractiveMode {
 					clearOnShrink: this.settingsManager.getClearOnShrink(),
 					showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
 					warnings: this.settingsManager.getWarnings(),
+					microloopMaxRepeats: this.settingsManager.getMicroloopMaxRepeats(),
+					microloopCountMode: this.settingsManager.getMicroloopCountMode(),
 				},
 				{
 					onAutoCompactChange: (enabled) => {
@@ -4244,6 +4246,12 @@ export class InteractiveMode {
 					},
 					onWarningsChange: (warnings) => {
 						this.settingsManager.setWarnings(warnings);
+					},
+					onMicroloopMaxRepeatsChange: (maxRepeats) => {
+						this.settingsManager.setMicroloopMaxRepeats(maxRepeats);
+					},
+					onMicroloopCountModeChange: (countMode) => {
+						this.settingsManager.setMicroloopCountMode(countMode);
 					},
 					onCancel: () => {
 						done();

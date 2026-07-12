@@ -107,6 +107,7 @@ async fn main() {
         }),
         ccr_store,
         trajectory_summary: Arc::new(Mutex::new(proxy::RollingSummary::new(5))),
+        last_verdict: Arc::new(Mutex::new(None)),
         trajectory_collector: Arc::new(Mutex::new(trajectory_collector)),
     };
 
@@ -117,6 +118,7 @@ async fn main() {
         .route("/v1/chat/completions", post(proxy::handle_proxy_request))
         .route("/v1/messages", post(proxy::handle_proxy_request))
         .route("/", get(|| async { "Microloop Proxy Running" }))
+        .route("/status", get(proxy::status_handler))
         .with_state(state);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {

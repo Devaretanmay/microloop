@@ -13,6 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 const MAX_INNER_ROUNDS: usize = 3;
@@ -46,6 +47,17 @@ impl RollingSummary {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct LastVerdict {
+    pub tool: String,
+    pub verdict: u8,
+    pub label: String,
+    pub match_count: usize,
+    pub error_count: usize,
+    pub latest_error: String,
+    pub latest_warning: String,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub microloop_state: Arc<Mutex<microloop::state::MicroloopState>>,
@@ -55,6 +67,7 @@ pub struct AppState {
     pub trajectory_summary: Arc<Mutex<RollingSummary>>,
     /// Records tool calls and periodically generates safety policies.
     pub trajectory_collector: Arc<Mutex<microloop_learn::collector::TrajectoryCollector>>,
+    pub last_verdict: Arc<Mutex<Option<LastVerdict>>>,
 }
 
 
@@ -269,6 +282,28 @@ pub async fn intercept_tool_calls(
                 "stateless_match_count": match_count,
             })
         );
+
+        // Store last verdict for /status endpoint
+        {
+            let error_msg = std::str::from_utf8(&state.error_buffer)
+                .unwrap_or("")
+                .trim_end_matches('\0')
+                .to_string();
+            let warning_msg = std::str::from_utf8(&state.warning_buffer)
+                .unwrap_or("")
+                .trim_end_matches('\0')
+                .to_string();
+            let mut last = app_state.last_verdict.lock().unwrap();
+            *last = Some(LastVerdict {
+                tool: name.clone(),
+                verdict: res,
+                label: label.to_string(),
+                match_count,
+                error_count,
+                latest_error: error_msg.clone(),
+                latest_warning: warning_msg.clone(),
+            });
+        }
 
         // Extract error message BEFORE dropping state lock
         let error_msg = std::str::from_utf8(&state.error_buffer)
@@ -765,6 +800,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            last_verdict: Arc::new(Mutex::new(None)),
             trajectory_collector: make_test_collector(),
         };
 
@@ -813,6 +849,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            last_verdict: Arc::new(Mutex::new(None)),
             trajectory_collector: make_test_collector(),
         };
 
@@ -861,6 +898,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            last_verdict: Arc::new(Mutex::new(None)),
             trajectory_collector: make_test_collector(),
         };
 
@@ -909,6 +947,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            last_verdict: Arc::new(Mutex::new(None)),
             trajectory_collector: make_test_collector(),
         };
 
@@ -958,6 +997,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            last_verdict: Arc::new(Mutex::new(None)),
             trajectory_collector: make_test_collector(),
         };
 
@@ -996,4 +1036,15 @@ mod tests {
         assert!(content.contains("SYSTEM INTERCEPT") || content.contains("Trajectory blocked"), 
             "Should block with adaptive threshold when errors present. Content: {}", content);
     }
+}
+
+pub async fn status_handler(
+    State(state): State<AppState>,
+) -> axum::Json<serde_json::Value> {
+    let verdict = state.last_verdict.lock().unwrap().clone();
+    let status = serde_json::json!({
+        "status": "ok",
+        "last_verdict": verdict,
+    });
+    axum::Json(status)
 }

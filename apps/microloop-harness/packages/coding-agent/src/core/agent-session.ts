@@ -123,6 +123,14 @@ export function parseSkillBlock(text: string): ParsedSkillBlock | null {
 	};
 }
 
+export interface MicroloopStatus {
+	status: "idle" | "repeat" | "blocked";
+	tool: string;
+	match_count: number;
+	error_count: number;
+	latest_error: string;
+}
+
 /** Session-specific events that extend the core AgentEvent */
 export type AgentSessionEvent =
 	| Exclude<AgentEvent, { type: "agent_end" }>
@@ -298,6 +306,8 @@ export class AgentSession {
 	// Retry state
 	private _retryAbortController: AbortController | undefined = undefined;
 	private _retryAttempt = 0;
+	// Microloop loop-detection state
+	private _microloopStatus: MicroloopStatus = { status: "idle", tool: "", match_count: 0, error_count: 0, latest_error: "" };
 
 	// Bash execution state
 	private _bashAbortController: AbortController | undefined = undefined;
@@ -670,13 +680,34 @@ export class AgentSession {
 		Object.assign(targetRecord, replacement);
 	}
 
-	/** Emit extension events based on agent events */
+	/** Fetch loop-detection status from the microloop proxy */
+	private _fetchMicroloopStatus(): void {
+		fetch("http://127.0.0.1:8080/status")
+			.then((res) => res.json() as Promise<{ last_verdict?: { tool: string; verdict: number; match_count: number; error_count: number; latest_error: string } }>)
+			.then((data) => {
+				if (!data.last_verdict) return;
+				const v = data.last_verdict;
+				this._microloopStatus = {
+					status: v.verdict >= 2 ? "blocked" : v.verdict === 1 ? "repeat" : "idle",
+					tool: v.tool ?? "",
+					match_count: v.match_count ?? 0,
+					error_count: v.error_count ?? 0,
+					latest_error: v.latest_error ?? "",
+				};
+			})
+			.catch(() => {
+				this._microloopStatus = { status: "idle", tool: "", match_count: 0, error_count: 0, latest_error: "" };
+			});
+	}
+
 	private async _emitExtensionEvent(event: AgentEvent): Promise<void> {
 		if (event.type === "agent_start") {
 			this._turnIndex = 0;
 			await this._extensionRunner.emit({ type: "agent_start" });
 		} else if (event.type === "agent_end") {
 			await this._extensionRunner.emit({ type: "agent_end", messages: event.messages });
+			// Fetch microloop loop-detection status from proxy
+			this._fetchMicroloopStatus();
 		} else if (event.type === "turn_start") {
 			const extensionEvent: TurnStartEvent = {
 				type: "turn_start",
@@ -822,6 +853,11 @@ export class AgentSession {
 	/** Full agent state */
 	get state(): AgentState {
 		return this.agent.state;
+	}
+
+	/** Current microloop loop-detection status */
+	get microloopStatus(): MicroloopStatus {
+		return this._microloopStatus;
 	}
 
 	/** Current model (may be undefined if not yet selected) */

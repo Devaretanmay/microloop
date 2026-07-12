@@ -126,6 +126,12 @@ export interface Settings {
 	httpProxy?: string; // Proxy URL applied as HTTP_PROXY and HTTPS_PROXY for Pi-managed HTTP clients
 	httpIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
 	websocketConnectTimeoutMs?: number; // WebSocket connect/open handshake timeout in milliseconds; 0 disables it
+	microloop?: MicroloopSettings;
+}
+
+export interface MicroloopSettings {
+	maxRepeats?: number; // default: 3
+	countMode?: "errors_only" | "all"; // default: "errors_only"
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -754,6 +760,26 @@ export class SettingsManager {
 	setTransport(transport: TransportSetting): void {
 		this.globalSettings.transport = transport;
 		this.markModified("transport");
+		this.save();
+	}
+
+	getMicroloopMaxRepeats(): number {
+		return this.settings.microloop?.maxRepeats ?? 3;
+	}
+
+	setMicroloopMaxRepeats(maxRepeats: number): void {
+		this.globalSettings.microloop = { ...this.globalSettings.microloop, maxRepeats };
+		this.markModified("microloop", "maxRepeats");
+		this.save();
+	}
+
+	getMicroloopCountMode(): "errors_only" | "all" {
+		return this.settings.microloop?.countMode ?? "errors_only";
+	}
+
+	setMicroloopCountMode(countMode: "errors_only" | "all"): void {
+		this.globalSettings.microloop = { ...this.globalSettings.microloop, countMode };
+		this.markModified("microloop", "countMode");
 		this.save();
 	}
 

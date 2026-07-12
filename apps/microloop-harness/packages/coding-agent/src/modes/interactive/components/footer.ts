@@ -144,6 +144,13 @@ export class FooterComponent implements Component {
 			statsParts.push(costStr);
 		}
 
+		// Microloop loop-detection status
+		const ms = this.session.microloopStatus;
+		if (ms.status !== "idle") {
+			const label = ms.status === "blocked" ? theme.fg("error", "blocked") : theme.fg("warning", "repeat");
+			statsParts.push(label);
+		}
+
 		// Colorize context percentage based on usage
 		let contextPercentStr: string;
 		const autoIndicator = this.autoCompactEnabled ? " (auto)" : "";
