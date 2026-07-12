@@ -88,7 +88,16 @@ pub struct MicroloopConfig {
 
 impl MicroloopConfig {
     pub fn from_yaml(yaml_str: &str) -> Result<Self, String> {
-        serde_yaml::from_str(yaml_str).map_err(|e| format!("YAML parsing error: {}", e))
+        serde_yml::from_str(yaml_str).map_err(|e| format!("YAML parsing error: {}", e))
+    }
+
+    pub fn default_yaml() -> String {
+        r#"defaults:
+  trajectory_gate:
+    max_repeats: 3
+    count_mode: errors_only
+"#
+        .to_string()
     }
 }
 

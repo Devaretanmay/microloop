@@ -1,10 +1,7 @@
 """
 Microloop + LiteLLM Guardrail Integration
-=========================================
 
-Official high-performance Microloop integration for LiteLLM.
-Uses the Rust-backed Microloop engine to detect agent loops in
-under a microsecond — before ever reaching the LLM.
+Uses the Rust-backed Microloop engine to detect agent loops before they reach the LLM.
 
 Install: pip install "microloop[litellm]"
 """
@@ -14,8 +11,6 @@ from __future__ import annotations
 import json
 import logging
 from typing import Any, Dict, Optional
-
-# ── Graceful optional-litellm import ──────────────────────────────────────────
 
 try:
     from litellm.integrations.custom_guardrail import CustomGuardrail
@@ -32,14 +27,10 @@ except ImportError:
         "Install it with: pip install 'microloop[litellm]'"
     )
 
-# ── Core engine import (always available — microloop is a core dep) ────────────
-
 from microloop.microloop_core import Microloop  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-
-# ── Exception ─────────────────────────────────────────────────────────────────
 
 class MicroloopLoopDetected(ValueError):
     """Raised when Microloop detects a repeating tool call trajectory."""
@@ -63,16 +54,9 @@ class MicroloopLoopDetected(ValueError):
         super().__init__(msg)
 
 
-# ── Guardrail ─────────────────────────────────────────────────────────────────
-
 class MicroloopLiteLLMGuardrail(CustomGuardrail):
     """
-    Official Microloop LiteLLM guardrail.
-
-    Hooks into LiteLLM's ``async_pre_call_hook`` to examine every tool call
-    before it reaches the LLM.  If the same tool + arguments repeat beyond
-    ``max_repeats`` within a sliding window, the call is blocked and a
-    ``BadRequestError`` is raised — saving API tokens and latency.
+    LiteLLM guardrail that blocks repeated tool calls.
 
     Parameters
     ----------
@@ -82,9 +66,6 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
         Sliding-window size (number of past calls examined). Default ``10``.
     volatile_fields:
         JSON field names excluded from comparison (e.g. ``['req_id']``).
-        Microloop auto-infers high-entropy fields if left empty.
-    **kwargs:
-        Forwarded to :class:`CustomGuardrail`.
     """
 
     def __init__(
@@ -100,7 +81,6 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
                 "Install it with: pip install 'microloop[litellm]'"
             )
 
-        # LiteLLM base initialisation
         super().__init__(
             guardrail_name="microloop",
             supported_event_hooks=["pre_call"],
@@ -111,21 +91,15 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
         self._max_repeats = max_repeats
         self._history_window = history_window
         self._volatile_fields = list(volatile_fields or [])
-
-        # Per-session Microloop engines: session_id → Microloop instance
         self._engines: Dict[str, Microloop] = {}
 
         logger.info(
-            "Microloop LiteLLM guardrail initialised "
-            "(max_repeats=%d, window=%d)",
+            "Microloop LiteLLM guardrail initialised (max_repeats=%d, window=%d)",
             max_repeats,
             history_window,
         )
 
-    # ── Internal helpers ───────────────────────────────────────────────────────
-
     def _get_engine(self, session_id: str) -> Microloop:
-        """Return (or lazily create) a Microloop engine for *session_id*."""
         if session_id not in self._engines:
             cfg = json.dumps(
                 {
@@ -139,7 +113,6 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
 
     @staticmethod
     def _extract_tool_call(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Pull the most-recent tool call dict from a LiteLLM request body."""
         messages = data.get("messages") or []
         if not messages:
             return None
@@ -158,22 +131,14 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
             metadata.get("session_id") or data.get("litellm_session_id", "default")
         )
 
-    # ── LiteLLM hook ───────────────────────────────────────────────────────────
-
     async def async_pre_call_hook(
         self,
         user_model_dict: Dict[str, Any],
         cache: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
-        """
-        Intercept the request before it reaches the model.
-
-        Returns ``None`` to allow the call, or a modified dict to override it.
-        Raises :class:`MicroloopLoopDetected` to block it entirely.
-        """
         tool_call = self._extract_tool_call(user_model_dict)
         if tool_call is None:
-            return None  # Not a tool call — allow
+            return None
 
         session_id = self._get_session_id(user_model_dict)
         engine = self._get_engine(session_id)
@@ -197,4 +162,4 @@ class MicroloopLiteLLMGuardrail(CustomGuardrail):
                 session_id=session_id,
             )
 
-        return None  # allow
+        return None

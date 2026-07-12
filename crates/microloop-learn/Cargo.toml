@@ -1,0 +1,13 @@
+[package]
+name = "microloop-learn"
+version = "0.1.0"
+edition = "2024"
+description = "Trajectory learning engine for microloop — analyzes agent tool-call history and auto-generates optimal safety policies"
+license = "Apache-2.0"
+repository = "https://github.com/Devaretanmay/microloop"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yml = "0.0.13"
+clap = { version = "4", features = ["derive"] }

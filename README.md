@@ -20,9 +20,9 @@
 
 ## The $500 Loop of Death
 
-You build an autonomous agent, run it overnight, and wake up to a $500 OpenAI bill. 
+You build an autonomous agent, run it overnight, and wake up to a $500 OpenAI bill.
 
-The agent tried to write a file or run a terminal command. The tool returned an error. The agent retried with the exact same arguments. It failed again. It spent the next six hours in a tight loop, burning millions of tokens and accomplishing nothing. 
+The agent tried to write a file or run a terminal command. The tool returned an error. The agent retried with the exact same arguments. It failed again. It spent the next six hours in a tight loop, burning millions of tokens and accomplishing nothing.
 
 Worse, the tool outputs 50,000 tokens of raw JSON. The LLM gets buried in the noise, loses its reasoning thread, and loops harder.
 
@@ -50,20 +50,20 @@ Counters measure quantity. Microloop measures redundancy and information density
 Microloop runs locally in-process. The pure Rust core hashes tool calls and checks the ring buffer for repetitive trajectories in under 200 nanoseconds. It introduces zero measurable overhead to your agent's execution.
 
 ### 2. Context Compression & CCR
-Microloop intercepts `role: tool` outputs and routes them through specialized compression engines (JSON arrays, AST-based code, build logs, and prose). It reduces token count by 60-95%. 
-Original payloads are stored in a local SQLite Cache-Compress-Retrieve (CCR) store. If the LLM realizes it needs the dropped data, it calls a retrieval tool. The compression is lossy on the wire, but lossless end-to-end.
+Microloop intercepts `role: tool` outputs and routes them through specialized compression engines (JSON arrays, AST-based code, build logs, and prose). It reduces token count by 60-95%.
+Original payloads are stored in a local SQLite Cache-Compress-Retrieve (CCR) store. If the LLM needs the dropped data, it calls a retrieval tool. The compression is lossy on the wire, but lossless end-to-end.
 
 ### 3. Amortized Trajectory Injection
-When a loop is blocked, Microloop does not just return a generic error. The proxy maintains a rolling, highly compressed summary of the agent's recent actions. Upon blocking, it injects this dense trajectory summary directly into the rejection message. This forces the LLM to see exactly why it is stuck and pivot, with zero synchronous latency added to the rejection path.
+When a loop is blocked, Microloop injects a dense summary of the agent's recent actions directly into the rejection message, forcing the LLM to see exactly why it is stuck and pivot.
 
 ### 4. Smart Volatile Field Masking
-Naive loop detectors fail when agents include timestamps, request IDs, or random seeds in their tool arguments. Microloop automatically detects high-entropy fields (like `req_id: "9831"` changing to `req_id: "9832"`) and masks them out, catching the loop even when arguments are not 100% identical.
+Automatically detects high-entropy fields (like `req_id: "9831"` changing to `req_id: "9832"`) and masks them, catching loops even when arguments are not 100% identical.
 
 ### 5. Adaptive Thresholding
-If a tool call returns an error, the agent is already in a high-risk state. Microloop automatically tightens its repetition thresholds on failure, forcing the agent to pivot immediately rather than hammering a broken endpoint.
+If a tool call returns an error, the agent is in a high-risk state. Microloop automatically tightens its repetition thresholds on failure, forcing the agent to pivot immediately.
 
 ### 6. Horizontal Redis Sync
-Running a cluster of agent workers? Plug in a Redis backend to share blocklists and loop states across your entire deployment in real-time.
+Plug in a Redis backend to share blocklists and loop states across your entire deployment in real-time.
 
 ---
 
@@ -73,7 +73,6 @@ Microloop can be used as a zero-code-change reverse proxy, a Python/JS middlewar
 
 ```mermaid
 graph TB
-    %% Nodes
     Agent[Your AI Agent]
     Proxy[Microloop Proxy]
     Core[Core Engine <br/><i>Stateless Hashing</i>]
@@ -82,7 +81,6 @@ graph TB
     Redis[(Redis Cluster)]
     LLM[Upstream LLM Provider]
 
-    %% Styles
     classDef main fill:#f8f9fa,stroke:#343a40,stroke-width:2px;
     classDef agent fill:#e9ecef,stroke:#495057,stroke-width:1px;
     classDef cloud fill:#fff,stroke:#adb5bd,stroke-width:2px;
@@ -93,7 +91,6 @@ graph TB
     class LLM cloud;
     class CCR,Redis store;
 
-    %% Flows
     Agent -->|1. HTTP Request| Proxy
     Proxy -->|2. Fast Check ~200ns| Core
     Proxy -->|3. Compress Tool Outputs| Compressor
@@ -112,15 +109,13 @@ graph TB
 Run the Microloop proxy and point your OpenAI or Anthropic client to it. No changes to your agent code required.
 
 ```bash
-# Start the proxy
 TARGET_API_URL=https://api.openai.com OPENAI_API_KEY=sk-... cargo run -p microloop-proxy
 
-# In your agent code, simply change the base URL:
+# In your agent code, change the base URL:
 # openai.base_url = "http://127.0.0.1:8080/v1"
 ```
 
 ### Option B: Python SDK
-Install the official Python package backed by the Rust core.
 
 ```bash
 pip install microloop
@@ -129,17 +124,12 @@ pip install microloop
 ```python
 from microloop import Microloop
 
-# Initialize the engine
 engine = Microloop("max_repeats: 3")
 
-# Verify before running the tool
-# Returns 0 if allowed, or a block code if a loop is detected
 result = engine.verify("write_file", '{"path": "/tmp/x.txt"}')
-
 if result > 0:
     print("Action blocked. Trajectory summary injected.")
 
-# If the LLM needs the original uncompressed tool output:
 original_data = engine.retrieve("sha256_hash_of_original_payload")
 ```
 
@@ -156,8 +146,6 @@ let result = verify(&mut state, b"write_file", b"{\"path\": \"/tmp/x.txt\"}");
 
 ## Ecosystem Integrations
 
-Microloop has native integration wrappers for major AI libraries:
-
 *   **LiteLLM**: Sub-microsecond Rust guardrails for LiteLLM proxies.
 *   **LangGraph**: Middleware interceptors for LangGraph state machines.
 *   **Model Context Protocol (MCP)**: Wrap every tool call in automatic loop detection and compression.
@@ -166,23 +154,21 @@ Microloop has native integration wrappers for major AI libraries:
 
 ## Performance Benchmarks
 
-Microloop is engineered for zero overhead. All benchmarks run with `cargo run --release --bin microloop-benchmark` on a single thread.
+All benchmarks run with `cargo run --release --bin microloop-benchmark` on a single thread.
 
 | Metric | Microloop | Prompt-Based Guardrails |
 | :--- | :--- | :--- |
 | **Check Latency** | **197 nanoseconds** | ~1.5 seconds (API call) |
 | **Context Reduction** | **60% - 95%** | 0% (Passes raw output) |
 | **Operational Cost** | **$0.00** (Local execution) | ~$0.01 per step (Token burn) |
-| **Execution Safety** | **100% Deterministic** | Probabilistic (Hallucinates/Misses) |
+| **Execution Safety** | **100% Deterministic** | Probabilistic |
 | **Memory Footprint** | **< 10 MB** | N/A |
 | **Throughput** | **5,000,000+ checks/sec** | ~50 checks/sec |
-
-### Detailed Benchmark Results
 
 | Benchmark | Iterations | Per Op | Ops/s |
 | :--- | ---: | ---: | ---: |
 | `verify_e2e` | 100,000 | **197 ns** | **5,071,573** |
-| `cold_start_verify` (init + first call) | 10,000 | **42,460 ns** | **23,551** |
+| `cold_start_verify` | 10,000 | **42,460 ns** | **23,551** |
 | `compress_short_fastpath` (<512 bytes) | 200,000 | **50 ns** | **19,905,780** |
 | `oscillation_detect` | 500,000 | 3,049 ns | 327,887 |
 | `state_init` | 10,000 | 43,176 ns | 23,160 |
@@ -193,7 +179,6 @@ Microloop is engineered for zero overhead. All benchmarks run with `cargo run --
 | `compress_search_results` | 50,000 | 198,066 ns | 5,049 |
 | `mixed_workload` (verify + compress, 8 tools) | 10,000 | 1,094,099 ns | 914 |
 
-Run the benchmarks yourself:
 ```bash
 cargo run --release --bin microloop-benchmark
 ```
@@ -201,8 +186,6 @@ cargo run --release --bin microloop-benchmark
 ---
 
 ## Configuration
-
-A single YAML file controls the shield layer and compression parameters:
 
 ```yaml
 # Loop Detection
@@ -212,11 +195,10 @@ strictness: Balanced    # Lenient, Balanced, or Strict
 
 # Context Compression
 compression:
-  enabled: true         # Turn on tool output compression
-  ccr_enabled: true     # Cache originals for lossless retrieval
-  target_ratio: 0.8     # Target 80% reduction in token count
+  enabled: true
+  ccr_enabled: true
+  target_ratio: 0.8
 
-# Tool Specific Overrides
 tools:
   - name: execute_command
     trajectory_gate:
@@ -225,11 +207,10 @@ tools:
 
 ---
 
-## Security & Verification
+## Security
 
-Microloop is built for production environments. 
 *   No tool data, code, or context ever leaves your environment.
 *   Zero external API calls for loop detection or compression.
 *   Apache 2.0 Licensed.
 
-For security concerns or to report a vulnerability, please refer to [SECURITY.md](SECURITY.md).
+For security concerns, refer to [SECURITY.md](SECURITY.md).

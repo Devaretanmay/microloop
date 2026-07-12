@@ -1,0 +1,10 @@
+[package]
+name = "microloop-cli"
+version = "0.2.0"
+edition = "2024"
+
+[[bin]]
+name = "microloop"
+path = "src/main.rs"
+
+[dependencies]

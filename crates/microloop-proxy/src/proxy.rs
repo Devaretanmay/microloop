@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use sha2::{Digest, Sha256};
 
 const MAX_INNER_ROUNDS: usize = 3;
@@ -52,6 +53,8 @@ pub struct AppState {
     pub api_key: String,
     pub ccr_store: Arc<crate::ccr::CcrStore>,
     pub trajectory_summary: Arc<Mutex<RollingSummary>>,
+    /// Records tool calls and periodically generates safety policies.
+    pub trajectory_collector: Arc<Mutex<microloop_learn::collector::TrajectoryCollector>>,
 }
 
 
@@ -126,6 +129,9 @@ pub async fn intercept_tool_calls(
     if parsed_tool_calls.is_empty() {
         return;
     }
+
+    // Collect tool call data outside the microloop_state lock to prevent
+    // deadlock (collector callback may acquire microloop_state)
 
     for (name, arguments_str, arguments_val) in parsed_tool_calls {
         let mut state = app_state.microloop_state.lock().unwrap();
@@ -264,6 +270,29 @@ pub async fn intercept_tool_calls(
             })
         );
 
+        // Extract error message BEFORE dropping state lock
+        let error_msg = std::str::from_utf8(&state.error_buffer)
+            .unwrap_or("Unknown error")
+            .trim_end_matches('\0')
+            .to_string();
+
+        // State lock drops here — release before recording to collector
+        // to prevent deadlock (collector callback may re-acquire microloop_state)
+        drop(state);
+
+        // Record to collector OUTSIDE the microloop_state lock
+        // to prevent deadlock (collector callback may re-acquire microloop_state)
+        {
+            let has_error = error_count > 0;
+            let ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            if let Ok(mut collector) = app_state.trajectory_collector.lock() {
+                collector.record(&name, &arguments_val, has_error, ts);
+            }
+        }
+
         if res != 0 {
             let mut err_str = if count + 1 >= max_repeats {
                 format!(
@@ -271,10 +300,7 @@ pub async fn intercept_tool_calls(
                     match_count, error_count, max_repeats
                 )
             } else {
-                std::str::from_utf8(&state.error_buffer)
-                    .unwrap_or("Unknown error")
-                    .trim_end_matches('\0')
-                    .to_string()
+                error_msg.clone()
             };
 
             let ts = app_state.trajectory_summary.lock().unwrap();
@@ -723,6 +749,13 @@ pub async fn handle_proxy_request(
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+    fn make_test_collector() -> Arc<Mutex<microloop_learn::collector::TrajectoryCollector>> {
+        Arc::new(Mutex::new(
+            microloop_learn::collector::TrajectoryCollector::new()
+                .with_min_analysis(100), // don't auto-flush in tests
+        ))
+    }
+
     #[tokio::test]
     async fn test_volatile_auto_inference() {
         let state = microloop::state::MicroloopState::new("max_repeats: 3\n").unwrap();
@@ -732,6 +765,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            trajectory_collector: make_test_collector(),
         };
 
         let request_body = json!({
@@ -779,6 +813,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            trajectory_collector: make_test_collector(),
         };
 
         let request_body = json!({
@@ -826,6 +861,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            trajectory_collector: make_test_collector(),
         };
 
         let request_body = json!({
@@ -873,6 +909,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            trajectory_collector: make_test_collector(),
         };
 
         let request_body = json!({
@@ -921,6 +958,7 @@ mod tests {
             api_key: "".to_string(),
             ccr_store: Arc::new(crate::ccr::CcrStore::new(":memory:").unwrap()),
             trajectory_summary: Arc::new(Mutex::new(RollingSummary::new(5))),
+            trajectory_collector: make_test_collector(),
         };
 
         let request_body = json!({
